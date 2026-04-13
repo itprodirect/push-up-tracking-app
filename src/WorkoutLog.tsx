@@ -6,8 +6,14 @@ import {
   groupSets,
 } from './storage';
 import { formatHistoryDate } from './dates';
+import {
+  LogRange,
+  describeRange,
+  filterDaysInRange,
+  summarize,
+} from './workoutLog.helpers';
 
-export type LogRange = 'week' | 'month' | '30d' | 'year' | 'all';
+export type { LogRange };
 
 const RANGES: { key: LogRange; label: string }[] = [
   { key: 'week', label: 'Week' },
@@ -124,102 +130,4 @@ export function WorkoutLog({
       )}
     </>
   );
-}
-
-/** Cutoff start date for a range. Returns null for 'all' (no lower bound). */
-function rangeStart(range: LogRange): Date | null {
-  const now = new Date();
-  if (range === 'all') return null;
-
-  if (range === '30d') {
-    const d = new Date(now);
-    d.setDate(d.getDate() - 29); // last 30 days including today
-    return d;
-  }
-
-  if (range === 'week') {
-    // ISO week: Monday through today. Sun(0) => offset 6, Mon(1) => 0, etc.
-    const d = new Date(now);
-    const dow = d.getDay();
-    const offset = dow === 0 ? 6 : dow - 1;
-    d.setDate(d.getDate() - offset);
-    return d;
-  }
-
-  if (range === 'month') {
-    return new Date(now.getFullYear(), now.getMonth(), 1);
-  }
-
-  if (range === 'year') {
-    return new Date(now.getFullYear(), 0, 1);
-  }
-
-  return null;
-}
-
-function filterDaysInRange(
-  days: Record<string, WorkoutDay>,
-  range: LogRange,
-): WorkoutDay[] {
-  const start = rangeStart(range);
-  const startKey = start ? todayKeyLocal(start) : null;
-  const result: WorkoutDay[] = [];
-  const keys = Object.keys(days).sort().reverse();
-  for (const key of keys) {
-    if (startKey && key < startKey) continue;
-    const day = days[key];
-    if (day.exercises.length > 0) result.push(day);
-  }
-  return result;
-}
-
-// Local helper so we don't import circularly; mirrors dates.ts#todayKey.
-function todayKeyLocal(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
-function summarize(rangeDays: WorkoutDay[]) {
-  let totalVolume = 0;
-  let totalSets = 0;
-  const byName = new Map<string, { name: string; count: number; volume: number }>();
-  for (const day of rangeDays) {
-    for (const ex of day.exercises) {
-      const v = exerciseVolume(ex);
-      totalVolume += v;
-      totalSets += ex.sets.length;
-      const existing = byName.get(ex.name) ?? { name: ex.name, count: 0, volume: 0 };
-      existing.count += ex.sets.length;
-      existing.volume += v;
-      byName.set(ex.name, existing);
-    }
-  }
-  const topExercises = Array.from(byName.values())
-    .sort((a, b) => b.volume - a.volume)
-    .slice(0, 3);
-  return {
-    workoutCount: rangeDays.length,
-    totalVolume,
-    totalSets,
-    topExercises,
-  };
-}
-
-function describeRange(range: LogRange): string {
-  const now = new Date();
-  if (range === 'all') return 'All time';
-  if (range === '30d') return 'Last 30 days';
-  if (range === 'year') return `${now.getFullYear()}`;
-  if (range === 'month') {
-    return now.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-  }
-  if (range === 'week') {
-    const start = rangeStart('week')!;
-    const sMo = start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-    const eMo = now.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-    return `${sMo} – ${eMo}, ${now.getFullYear()}`;
-  }
-  return '';
 }

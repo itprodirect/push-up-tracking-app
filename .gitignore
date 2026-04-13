@@ -14,3 +14,4 @@ dev-dist
 .playwright-mcp/
 *.png
 !public/*.png
+tsconfig.tsbuildinfo
