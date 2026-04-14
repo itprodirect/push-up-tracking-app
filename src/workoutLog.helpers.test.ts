@@ -157,22 +157,35 @@ describe('summarize', () => {
         { id: '4', name: 'Curl', sets: [{ weight: 20, reps: 10 }] }, // 200
       ]),
     ]);
-    expect(s.topExercises.map((e) => e.name)).toEqual(['Squat', 'Bench', 'Row']);
+    expect(s.topExercises.map((e) => e.name)).toEqual(['Squat', 'Bench Press', 'Row']);
     expect(s.topExercises).toHaveLength(3);
   });
 
   it('aggregates across days when the same exercise name appears multiple times', () => {
     const s = summarize([
       makeDay('2026-04-13', [
+        { id: 'a', name: 'Row', sets: [{ weight: 100, reps: 10 }] },
+      ]),
+      makeDay('2026-04-11', [
+        { id: 'b', name: 'Row', sets: [{ weight: 100, reps: 10 }] },
+      ]),
+    ]);
+    const row = s.topExercises.find((e) => e.name === 'Row');
+    expect(row?.count).toBe(2);
+    expect(row?.volume).toBe(2000);
+  });
+
+  it('normalizes known aliases before aggregating top exercises', () => {
+    const s = summarize([
+      makeDay('2026-04-13', [
         { id: 'a', name: 'Bench', sets: [{ weight: 100, reps: 10 }] },
       ]),
       makeDay('2026-04-11', [
-        { id: 'b', name: 'Bench', sets: [{ weight: 100, reps: 10 }] },
+        { id: 'b', name: 'Bench Press', sets: [{ weight: 100, reps: 10 }] },
       ]),
     ]);
-    const bench = s.topExercises.find((e) => e.name === 'Bench');
-    expect(bench?.count).toBe(2);
-    expect(bench?.volume).toBe(2000);
+
+    expect(s.topExercises).toEqual([{ name: 'Bench Press', count: 2, volume: 2000 }]);
   });
 
   it('ignores empty exercises when summarizing a workout day', () => {
@@ -187,7 +200,7 @@ describe('summarize', () => {
     expect(s.workoutCount).toBe(1);
     expect(s.totalSets).toBe(1);
     expect(s.totalVolume).toBe(1000);
-    expect(s.topExercises.map((e) => e.name)).toEqual(['Bench']);
+    expect(s.topExercises.map((e) => e.name)).toEqual(['Bench Press']);
   });
 });
 

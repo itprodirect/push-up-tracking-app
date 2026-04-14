@@ -1,6 +1,7 @@
 // Pure helpers for the workout log view. Kept separate from the React component
 // so they can be unit-tested without jsdom or any component plumbing.
 import { WorkoutDay, exerciseVolume } from './storage';
+import { normalizeExerciseName } from './exerciseCatalog';
 
 export type LogRange = 'week' | 'month' | '30d' | 'year' | 'all';
 
@@ -68,14 +69,16 @@ export function summarize(rangeDays: WorkoutDay[]): RangeSummary {
     let hasLoggedExercise = false;
     for (const ex of day.exercises) {
       if (ex.sets.length === 0) continue;
+      const name = normalizeExerciseName(ex.name);
+      if (!name) continue;
       hasLoggedExercise = true;
       const v = exerciseVolume(ex);
       totalVolume += v;
       totalSets += ex.sets.length;
-      const existing = byName.get(ex.name) ?? { name: ex.name, count: 0, volume: 0 };
+      const existing = byName.get(name) ?? { name, count: 0, volume: 0 };
       existing.count += ex.sets.length;
       existing.volume += v;
-      byName.set(ex.name, existing);
+      byName.set(name, existing);
     }
     if (hasLoggedExercise) workoutCount++;
   }
