@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getExerciseCategory, normalizeExerciseName } from './exerciseCatalog';
+import { getExerciseCategory, isKnownExercise, normalizeExerciseName } from './exerciseCatalog';
 
 describe('normalizeExerciseName', () => {
   it('returns the canonical name for an exact canonical match', () => {
@@ -53,5 +53,19 @@ describe('getExerciseCategory', () => {
 
   it('returns undefined for an unknown custom exercise', () => {
     expect(getExerciseCategory('My New Custom Exercise')).toBeUndefined();
+  });
+});
+
+describe('isKnownExercise', () => {
+  it('returns true for a canonical exercise', () => {
+    expect(isKnownExercise('Bench Press')).toBe(true);
+  });
+
+  it('returns true for a known alias after normalization', () => {
+    expect(isKnownExercise(' free bench push ')).toBe(true);
+  });
+
+  it('returns false for an unknown custom exercise', () => {
+    expect(isKnownExercise('My New Custom Exercise')).toBe(false);
   });
 });

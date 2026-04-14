@@ -118,6 +118,37 @@ describe('Workouts screen', () => {
     expect(screen.getAllByText('My New Custom Exercise').length).toBeGreaterThanOrEqual(1);
   });
 
+  it('distinguishes catalog and custom items in recent suggestions without duplicating aliases', async () => {
+    const user = userEvent.setup();
+    render(<Workouts />);
+
+    await user.type(screen.getByPlaceholderText(/hammer pullover pull/i), 'Bench');
+    await user.click(screen.getByRole('button', { name: /add exercise/i }));
+    let card = getTodayExerciseCard();
+    await user.type(within(card).getByPlaceholderText('weight'), '100');
+    await user.type(within(card).getByPlaceholderText('reps'), '10');
+    await user.click(within(card).getByRole('button', { name: /^add$/i }));
+
+    await user.type(screen.getByPlaceholderText(/hammer pullover pull/i), 'My New Custom Exercise');
+    await user.click(screen.getByRole('button', { name: /add exercise/i }));
+    const customCard = screen.getAllByPlaceholderText('weight')
+      .map((input) => input.closest('.exercise-card') as HTMLElement)
+      .find((candidate) => within(candidate).queryByText('My New Custom Exercise'));
+    if (!customCard) throw new Error('Could not find custom exercise card');
+    await user.type(within(customCard).getByPlaceholderText('weight'), '50');
+    await user.type(within(customCard).getByPlaceholderText('reps'), '12');
+    await user.click(within(customCard).getByRole('button', { name: /^add$/i }));
+
+    const recentButtons = screen.getAllByRole('button').filter((button) => button.className.includes('suggestion-chip'));
+    expect(recentButtons).toHaveLength(2);
+    expect(recentButtons[0]).toHaveTextContent('Bench Press');
+    expect(recentButtons[0]).toHaveTextContent('Catalog');
+    expect(recentButtons[1]).toHaveTextContent('My New Custom Exercise');
+    expect(recentButtons[1]).toHaveTextContent('Custom');
+    expect(screen.queryByRole('button', { name: /free bench push/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^\+ Bench$/i })).not.toBeInTheDocument();
+  });
+
   it('rejects a negative weight entry', async () => {
     const user = userEvent.setup();
     const { container } = render(<Workouts />);

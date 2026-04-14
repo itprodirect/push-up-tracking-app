@@ -111,18 +111,29 @@ const aliasLookup = new Map(
   Object.entries(EXERCISE_ALIASES).map(([alias, canonical]) => [normalizeKey(alias), canonical]),
 );
 
+export function getCanonicalExerciseName(input: string): CanonicalExerciseName | undefined {
+  const trimmed = input.trim();
+  if (!trimmed) return undefined;
+
+  const normalized = normalizeKey(trimmed);
+  return aliasLookup.get(normalized) ?? canonicalLookup.get(normalized);
+}
+
 export function normalizeExerciseName(input: string): string {
   const trimmed = input.trim();
   if (!trimmed) return '';
 
-  const normalized = normalizeKey(trimmed);
-  return aliasLookup.get(normalized) ?? canonicalLookup.get(normalized) ?? trimmed;
+  return getCanonicalExerciseName(trimmed) ?? trimmed;
 }
 
 export function getExerciseCategory(input: string): ExerciseCategory | undefined {
-  const canonicalName = normalizeExerciseName(input);
+  const canonicalName = getCanonicalExerciseName(input);
   if (!canonicalName) return undefined;
-  return EXERCISE_CATEGORY_BY_CANONICAL[canonicalName as CanonicalExerciseName];
+  return EXERCISE_CATEGORY_BY_CANONICAL[canonicalName];
+}
+
+export function isKnownExercise(input: string): boolean {
+  return getCanonicalExerciseName(input) !== undefined;
 }
 
 function normalizeKey(value: string): string {
