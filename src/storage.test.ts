@@ -120,10 +120,36 @@ describe('localStorage round-trips', () => {
     expect(loadEntries()).toEqual({});
   });
 
+  it('returns empty object when entries JSON parses to a non-object root', () => {
+    localStorage.setItem('pushup.entries.v1', 'null');
+    expect(loadEntries()).toEqual({});
+  });
+
+  it('normalizes malformed entry shapes instead of trusting them directly', () => {
+    localStorage.setItem(
+      'pushup.entries.v1',
+      JSON.stringify({
+        '2026-04-13': { date: '2026-04-13', sets: [10, 'bad', 20] },
+        '2026-04-14': { date: 123, sets: null },
+        '2026-04-15': 'invalid',
+      }),
+    );
+
+    expect(loadEntries()).toEqual({
+      '2026-04-13': { date: '2026-04-13', sets: [10, 20] },
+      '2026-04-14': { date: '2026-04-14', sets: [] },
+    });
+  });
+
   it('saves and loads settings, falling back to default 50 goal', () => {
     expect(loadSettings()).toEqual({ dailyGoal: 50 });
     saveSettings({ dailyGoal: 75 });
     expect(loadSettings()).toEqual({ dailyGoal: 75 });
+  });
+
+  it('falls back to the default goal when parsed settings are invalid', () => {
+    localStorage.setItem('pushup.settings.v1', JSON.stringify({ dailyGoal: 0 }));
+    expect(loadSettings()).toEqual({ dailyGoal: 50 });
   });
 
   it('saves and loads workouts', () => {
@@ -142,5 +168,59 @@ describe('localStorage round-trips', () => {
     };
     saveWorkouts(workouts);
     expect(loadWorkouts()).toEqual(workouts);
+  });
+
+  it('normalizes malformed workout shapes instead of trusting them directly', () => {
+    localStorage.setItem(
+      'workouts.entries.v1',
+      JSON.stringify({
+        '2026-04-13': {
+          date: '2026-04-13',
+          exercises: [
+            {
+              id: 'a',
+              name: 'Bench',
+              category: 'push',
+              notes: 'top set',
+              sets: [{ weight: 100, reps: 10 }, { weight: 'bad', reps: 8 }],
+            },
+            {
+              id: 'b',
+              name: 'Row',
+              category: 'invalid',
+              sets: null,
+            },
+            {
+              id: 123,
+              name: 'Skip me',
+              sets: [],
+            },
+          ],
+        },
+        '2026-04-14': null,
+      }),
+    );
+
+    expect(loadWorkouts()).toEqual({
+      '2026-04-13': {
+        date: '2026-04-13',
+        exercises: [
+          {
+            id: 'a',
+            name: 'Bench',
+            category: 'push',
+            notes: 'top set',
+            sets: [{ weight: 100, reps: 10 }],
+          },
+          {
+            id: 'b',
+            name: 'Row',
+            category: undefined,
+            notes: undefined,
+            sets: [],
+          },
+        ],
+      },
+    });
   });
 });
