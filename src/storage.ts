@@ -20,7 +20,18 @@ export function loadEntries(): Record<string, DayEntry> {
   try {
     const raw = localStorage.getItem(ENTRIES_KEY);
     if (!raw) return {};
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    if (!isRecord(parsed)) return {};
+
+    const entries: Record<string, DayEntry> = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      if (!isRecord(value)) continue;
+      entries[key] = {
+        date: typeof value.date === 'string' ? value.date : key,
+        sets: normalizeNumberArray(value.sets),
+      };
+    }
+    return entries;
   } catch {
     return {};
   }
@@ -33,7 +44,12 @@ export function saveEntries(entries: Record<string, DayEntry>): void {
 export function loadSettings(): Settings {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (isRecord(parsed) && Number.isFinite(parsed.dailyGoal) && parsed.dailyGoal > 0) {
+        return { dailyGoal: parsed.dailyGoal };
+      }
+    }
   } catch {
     // fall through
   }
@@ -75,7 +91,18 @@ export function loadWorkouts(): Record<string, WorkoutDay> {
   try {
     const raw = localStorage.getItem(WORKOUTS_KEY);
     if (!raw) return {};
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    if (!isRecord(parsed)) return {};
+
+    const workouts: Record<string, WorkoutDay> = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      if (!isRecord(value)) continue;
+      workouts[key] = {
+        date: typeof value.date === 'string' ? value.date : key,
+        exercises: normalizeExercises(value.exercises),
+      };
+    }
+    return workouts;
   } catch {
     return {};
   }
@@ -108,4 +135,49 @@ export function groupSets(
     }
   }
   return out;
+}
+
+function normalizeExercises(value: unknown): WorkoutExercise[] {
+  if (!Array.isArray(value)) return [];
+
+  const exercises: WorkoutExercise[] = [];
+  for (const item of value) {
+    if (!isRecord(item)) continue;
+    if (typeof item.id !== 'string' || typeof item.name !== 'string') continue;
+    exercises.push({
+      id: item.id,
+      name: item.name,
+      category: normalizeCategory(item.category),
+      notes: typeof item.notes === 'string' ? item.notes : undefined,
+      sets: normalizeWorkoutSets(item.sets),
+    });
+  }
+  return exercises;
+}
+
+function normalizeWorkoutSets(value: unknown): WorkoutSet[] {
+  if (!Array.isArray(value)) return [];
+
+  const sets: WorkoutSet[] = [];
+  for (const item of value) {
+    if (!isRecord(item)) continue;
+    if (!Number.isFinite(item.weight) || !Number.isFinite(item.reps)) continue;
+    sets.push({ weight: item.weight, reps: item.reps });
+  }
+  return sets;
+}
+
+function normalizeNumberArray(value: unknown): number[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is number => Number.isFinite(item));
+}
+
+function normalizeCategory(value: unknown): WorkoutExercise['category'] {
+  return value === 'push' || value === 'pull' || value === 'legs' || value === 'core' || value === 'other'
+    ? value
+    : undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, any> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
