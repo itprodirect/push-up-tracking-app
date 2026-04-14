@@ -95,6 +95,16 @@ describe('filterDaysInRange', () => {
     expect(result.map((d) => d.date)).not.toContain('2026-04-14');
   });
 
+  it('excludes days whose exercises exist but have no logged sets', () => {
+    const withEmptyExercise: Record<string, WorkoutDay> = {
+      ...days,
+      '2026-04-15': day('2026-04-15', [{ id: 'draft', name: 'Draft Bench', sets: [] }]),
+    };
+    const later = new Date(2026, 3, 15);
+    const result = filterDaysInRange(withEmptyExercise, 'month', later);
+    expect(result.map((d) => d.date)).not.toContain('2026-04-15');
+  });
+
   it('returns newest day first', () => {
     const result = filterDaysInRange(days, 'year', now);
     expect(result[0].date).toBe('2026-04-13');
@@ -163,6 +173,21 @@ describe('summarize', () => {
     const bench = s.topExercises.find((e) => e.name === 'Bench');
     expect(bench?.count).toBe(2);
     expect(bench?.volume).toBe(2000);
+  });
+
+  it('ignores empty exercises when summarizing a workout day', () => {
+    const s = summarize([
+      makeDay('2026-04-13', [
+        { id: 'a', name: 'Bench', sets: [{ weight: 100, reps: 10 }] },
+        { id: 'draft', name: 'Pending Row', sets: [] },
+      ]),
+      makeDay('2026-04-12', [{ id: 'draft-only', name: 'Draft Only', sets: [] }]),
+    ]);
+
+    expect(s.workoutCount).toBe(1);
+    expect(s.totalSets).toBe(1);
+    expect(s.totalVolume).toBe(1000);
+    expect(s.topExercises.map((e) => e.name)).toEqual(['Bench']);
   });
 });
 

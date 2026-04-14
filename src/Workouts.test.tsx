@@ -69,6 +69,48 @@ describe('Workouts screen', () => {
     expect(groupDisplays.length).toBeGreaterThanOrEqual(1);
   });
 
+  it('does not count an empty exercise as a logged workout', async () => {
+    const user = userEvent.setup();
+    render(<Workouts />);
+
+    await user.type(screen.getByPlaceholderText(/hammer pullover pull/i), 'Bench Press');
+    await user.click(screen.getByRole('button', { name: /add exercise/i }));
+
+    expect(screen.getByText(/no workouts logged in this range yet/i)).toBeInTheDocument();
+  });
+
+  it('rejects a negative weight entry', async () => {
+    const user = userEvent.setup();
+    const { container } = render(<Workouts />);
+
+    await user.type(screen.getByPlaceholderText(/hammer pullover pull/i), 'Bench');
+    await user.click(screen.getByRole('button', { name: /add exercise/i }));
+
+    const card = getTodayExerciseCard();
+    await user.type(within(card).getByPlaceholderText('weight'), '-25');
+    await user.type(within(card).getByPlaceholderText('reps'), '10');
+    await user.click(within(card).getByRole('button', { name: /^add$/i }));
+
+    expect(getTodayTotalText(container)).toBe('0');
+    expect(screen.getByText(/no workouts logged in this range yet/i)).toBeInTheDocument();
+  });
+
+  it('rejects fractional reps instead of truncating them', async () => {
+    const user = userEvent.setup();
+    const { container } = render(<Workouts />);
+
+    await user.type(screen.getByPlaceholderText(/hammer pullover pull/i), 'Row');
+    await user.click(screen.getByRole('button', { name: /add exercise/i }));
+
+    const card = getTodayExerciseCard();
+    await user.type(within(card).getByPlaceholderText('weight'), '90');
+    await user.type(within(card).getByPlaceholderText('reps'), '8.5');
+    await user.click(within(card).getByRole('button', { name: /^add$/i }));
+
+    expect(getTodayTotalText(container)).toBe('0');
+    expect(screen.getByText(/no workouts logged in this range yet/i)).toBeInTheDocument();
+  });
+
   it('removes an exercise when Remove is clicked', async () => {
     const user = userEvent.setup();
     const { container } = render(<Workouts />);
@@ -100,5 +142,7 @@ describe('Workouts screen', () => {
     // Undo should remove it, dropping the day total back to 0
     await user.click(within(card).getByRole('button', { name: /undo last set/i }));
     expect(getTodayTotalText(container)).toBe('0');
+    expect(screen.queryByText('Curl')).not.toBeInTheDocument();
+    expect(screen.getByText(/no workouts logged in this range yet/i)).toBeInTheDocument();
   });
 });

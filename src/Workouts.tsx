@@ -54,7 +54,16 @@ export default function Workouts() {
   }
 
   function addSetsToExercise(exId: string, weight: number, reps: number, count: number) {
-    if (!Number.isFinite(weight) || !Number.isFinite(reps) || count <= 0) return;
+    if (
+      !Number.isFinite(weight) ||
+      weight < 0 ||
+      !Number.isInteger(reps) ||
+      reps <= 0 ||
+      !Number.isInteger(count) ||
+      count <= 0
+    ) {
+      return;
+    }
     setDays((prev) => {
       const existing = prev[viewDate];
       if (!existing) return prev;
@@ -72,9 +81,15 @@ export default function Workouts() {
     setDays((prev) => {
       const existing = prev[viewDate];
       if (!existing) return prev;
-      const exercises = existing.exercises.map((ex) =>
-        ex.id === exId ? { ...ex, sets: ex.sets.slice(0, -1) } : ex,
-      );
+      const exercises = existing.exercises.flatMap((ex) => {
+        if (ex.id !== exId) return [ex];
+        const sets = ex.sets.slice(0, -1);
+        return sets.length > 0 ? [{ ...ex, sets }] : [];
+      });
+      if (exercises.length === 0) {
+        const { [viewDate]: _drop, ...rest } = prev;
+        return rest;
+      }
       return { ...prev, [viewDate]: { ...existing, exercises } };
     });
   }
@@ -225,10 +240,10 @@ function ExerciseCard({
   const [count, setCount] = useState('1');
 
   function submit() {
-    const w = parseFloat(weight);
-    const r = parseInt(reps, 10);
-    const c = parseInt(count, 10);
-    if (!Number.isFinite(w) || !Number.isFinite(r) || !Number.isFinite(c)) return;
+    const w = parseNonNegativeNumber(weight);
+    const r = parsePositiveInteger(reps);
+    const c = parsePositiveInteger(count);
+    if (w === null || r === null || c === null) return;
     onAddSets(w, r, c);
     // Keep weight/reps so adding more sets at the same load is quick; reset count.
     setCount('1');
@@ -266,6 +281,9 @@ function ExerciseCard({
       <div className="set-form">
         <input
           className="text-input small"
+          type="number"
+          min="0"
+          step="any"
           inputMode="decimal"
           placeholder="weight"
           value={weight}
@@ -274,6 +292,9 @@ function ExerciseCard({
         <span className="x-sep">×</span>
         <input
           className="text-input small"
+          type="number"
+          min="1"
+          step="1"
           inputMode="numeric"
           placeholder="reps"
           value={reps}
@@ -282,6 +303,9 @@ function ExerciseCard({
         <span className="x-sep">×</span>
         <input
           className="text-input small"
+          type="number"
+          min="1"
+          step="1"
           inputMode="numeric"
           placeholder="sets"
           value={count}
@@ -306,6 +330,7 @@ function collectRecentExerciseNames(days: Record<string, WorkoutDay>) {
   const seen = new Map<string, { name: string; category: WorkoutExercise['category']; lastDate: string }>();
   for (const key of Object.keys(days).sort().reverse()) {
     for (const ex of days[key].exercises) {
+      if (ex.sets.length === 0) continue;
       if (!seen.has(ex.name)) {
         seen.set(ex.name, { name: ex.name, category: ex.category, lastDate: key });
       }
@@ -320,7 +345,9 @@ function buildVolumeHistory(
 ): { date: string; value: number }[] {
   const out: { date: string; value: number }[] = [];
   if (range === 'all') {
-    const keys = Object.keys(days).sort();
+    const keys = Object.keys(days)
+      .filter((key) => dayHasLoggedSets(days[key]))
+      .sort();
     if (keys.length === 0) {
       for (let i = 6; i >= 0; i--) {
         const d = new Date();
@@ -358,4 +385,19 @@ function rangeLabel(r: TrendRange): string {
 function cryptoId(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
+}
+
+function dayHasLoggedSets(day: WorkoutDay | undefined): boolean {
+  return !!day && day.exercises.some((ex) => ex.sets.length > 0);
+}
+
+function parseNonNegativeNumber(value: string): number | null {
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+function parsePositiveInteger(value: string): number | null {
+  if (!/^\d+$/.test(value.trim())) return null;
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 ? n : null;
 }

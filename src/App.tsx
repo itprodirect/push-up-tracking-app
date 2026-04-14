@@ -25,7 +25,7 @@ export default function App() {
           className={tab === 'pushups' ? 'active' : ''}
           onClick={() => switchTab('pushups')}
         >
-          <span className="tab-icon">💪</span>
+          <span className="tab-icon">{'\uD83D\uDCAA'}</span>
           <span>Push-Ups</span>
         </button>
         <button
@@ -34,7 +34,7 @@ export default function App() {
           className={tab === 'workouts' ? 'active' : ''}
           onClick={() => switchTab('workouts')}
         >
-          <span className="tab-icon">🏋️</span>
+          <span className="tab-icon">{'\uD83C\uDFCB\uFE0F'}</span>
           <span>Workouts</span>
         </button>
       </nav>
