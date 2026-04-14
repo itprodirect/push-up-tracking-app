@@ -30,6 +30,24 @@ describe('Workouts screen', () => {
     expect(getTodayTotalText(container)).toBe('0');
   });
 
+  it('wires the name field to the predefined exercise catalog without blocking typing', () => {
+    const { container } = render(<Workouts />);
+    const nameInput = screen.getByLabelText('Name');
+
+    expect(nameInput).toHaveAttribute('list', 'exercise-catalog');
+    expect(container.querySelector('datalist#exercise-catalog option[value="Bench Press"]')).not.toBeNull();
+    expect(container.querySelector('datalist#exercise-catalog option[value="Lat Pull"]')).not.toBeNull();
+  });
+
+  it('auto-fills the category chip for a known exercise alias', async () => {
+    const user = userEvent.setup();
+    render(<Workouts />);
+
+    await user.type(screen.getByLabelText('Name'), 'face pulls');
+
+    expect(screen.getByRole('button', { name: 'Shoulders' })).toHaveClass('active');
+  });
+
   it('adds an exercise and a set, updating today total volume', async () => {
     const user = userEvent.setup();
     const { container } = render(<Workouts />);
@@ -77,6 +95,27 @@ describe('Workouts screen', () => {
     await user.click(screen.getByRole('button', { name: /add exercise/i }));
 
     expect(screen.getByText(/no workouts logged in this range yet/i)).toBeInTheDocument();
+  });
+
+  it('normalizes a known alias when saving an exercise name', async () => {
+    const user = userEvent.setup();
+    render(<Workouts />);
+
+    await user.type(screen.getByPlaceholderText(/hammer pullover pull/i), ' free bench push ');
+    await user.click(screen.getByRole('button', { name: /add exercise/i }));
+
+    expect(screen.getAllByText('Bench Press').length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText('free bench push')).not.toBeInTheDocument();
+  });
+
+  it('preserves a custom manual exercise name when it is not in the catalog', async () => {
+    const user = userEvent.setup();
+    render(<Workouts />);
+
+    await user.type(screen.getByPlaceholderText(/hammer pullover pull/i), 'My New Custom Exercise');
+    await user.click(screen.getByRole('button', { name: /add exercise/i }));
+
+    expect(screen.getAllByText('My New Custom Exercise').length).toBeGreaterThanOrEqual(1);
   });
 
   it('rejects a negative weight entry', async () => {

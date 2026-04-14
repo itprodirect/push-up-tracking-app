@@ -75,7 +75,15 @@ export type WorkoutSet = {
 export type WorkoutExercise = {
   id: string;
   name: string;
-  category?: 'push' | 'pull' | 'legs' | 'core' | 'other';
+  category?:
+    | 'Chest / Push'
+    | 'Back / Pull'
+    | 'Arms'
+    | 'Shoulders'
+    | 'Legs'
+    | 'Cardio'
+    | 'core'
+    | 'other';
   sets: WorkoutSet[];
   notes?: string;
 };
@@ -173,9 +181,13 @@ function normalizeNumberArray(value: unknown): number[] {
 }
 
 function normalizeCategory(value: unknown): WorkoutExercise['category'] {
-  return value === 'push' || value === 'pull' || value === 'legs' || value === 'core' || value === 'other'
-    ? value
-    : undefined;
+  if (value === 'push' || value === 'Chest / Push') return 'Chest / Push';
+  if (value === 'pull' || value === 'Back / Pull') return 'Back / Pull';
+  if (value === 'legs' || value === 'Legs') return 'Legs';
+  if (value === 'Arms' || value === 'Shoulders' || value === 'Cardio' || value === 'core' || value === 'other') {
+    return value;
+  }
+  return undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, any> {

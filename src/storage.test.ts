@@ -160,7 +160,7 @@ describe('localStorage round-trips', () => {
           {
             id: 'a',
             name: 'Bench',
-            category: 'push' as const,
+            category: 'Chest / Push' as const,
             sets: [{ weight: 100, reps: 10 }],
           },
         ],
@@ -208,7 +208,7 @@ describe('localStorage round-trips', () => {
           {
             id: 'a',
             name: 'Bench',
-            category: 'push',
+            category: 'Chest / Push',
             notes: 'top set',
             sets: [{ weight: 100, reps: 10 }],
           },
@@ -219,6 +219,33 @@ describe('localStorage round-trips', () => {
             notes: undefined,
             sets: [],
           },
+        ],
+      },
+    });
+  });
+
+  it('maps legacy workout categories to the new category labels on load', () => {
+    localStorage.setItem(
+      'workouts.entries.v1',
+      JSON.stringify({
+        '2026-04-13': {
+          date: '2026-04-13',
+          exercises: [
+            { id: 'a', name: 'Bench', category: 'push', sets: [{ weight: 100, reps: 10 }] },
+            { id: 'b', name: 'Row', category: 'pull', sets: [{ weight: 90, reps: 10 }] },
+            { id: 'c', name: 'Leg Press', category: 'legs', sets: [{ weight: 300, reps: 10 }] },
+          ],
+        },
+      }),
+    );
+
+    expect(loadWorkouts()).toEqual({
+      '2026-04-13': {
+        date: '2026-04-13',
+        exercises: [
+          { id: 'a', name: 'Bench', category: 'Chest / Push', sets: [{ weight: 100, reps: 10 }] },
+          { id: 'b', name: 'Row', category: 'Back / Pull', sets: [{ weight: 90, reps: 10 }] },
+          { id: 'c', name: 'Leg Press', category: 'Legs', sets: [{ weight: 300, reps: 10 }] },
         ],
       },
     });

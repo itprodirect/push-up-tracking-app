@@ -11,15 +11,24 @@ import {
 import { formatHeaderDate, formatHistoryDate, parseKey, todayKey } from './dates';
 import { TrendChart, TrendRange } from './TrendChart';
 import { LogRange, WorkoutLog } from './WorkoutLog';
+import {
+  CANONICAL_EXERCISES,
+  EXERCISE_CATEGORIES,
+  getExerciseCategory,
+  normalizeExerciseName,
+} from './exerciseCatalog';
 
-const CATEGORIES: WorkoutExercise['category'][] = ['push', 'pull', 'legs', 'core', 'other'];
+const EXERCISE_CATALOG_ID = 'exercise-catalog';
 
 export default function Workouts() {
   const [days, setDays] = useState<Record<string, WorkoutDay>>(() => loadWorkouts());
   const [range, setRange] = useState<TrendRange>(30);
   const [logRange, setLogRange] = useState<LogRange>('week');
   const [viewDate, setViewDate] = useState<string>(() => todayKey());
-  const [draft, setDraft] = useState({ name: '', category: 'push' as WorkoutExercise['category'] });
+  const [draft, setDraft] = useState({
+    name: '',
+    category: EXERCISE_CATEGORIES[0] as WorkoutExercise['category'],
+  });
 
   useEffect(() => saveWorkouts(days), [days]);
 
@@ -30,7 +39,7 @@ export default function Workouts() {
   const recentNames = useMemo(() => collectRecentExerciseNames(days), [days]);
 
   function addExercise() {
-    const name = draft.name.trim();
+    const name = normalizeExerciseName(draft.name);
     if (!name) return;
     setDays((prev) => {
       const existing = prev[viewDate] ?? { date: viewDate, exercises: [] };
@@ -42,15 +51,32 @@ export default function Workouts() {
       };
       return { ...prev, [viewDate]: { ...existing, exercises: [...existing.exercises, ex] } };
     });
-    setDraft({ ...draft, name: '' });
+    setDraft((prev) => ({ ...prev, name: '' }));
   }
 
   function quickAddExercise(name: string, category: WorkoutExercise['category']) {
+    const normalizedName = normalizeExerciseName(name);
+    if (!normalizedName) return;
+    const detectedCategory = getExerciseCategory(normalizedName);
     setDays((prev) => {
       const existing = prev[viewDate] ?? { date: viewDate, exercises: [] };
-      const ex: WorkoutExercise = { id: cryptoId(), name, category, sets: [] };
+      const ex: WorkoutExercise = {
+        id: cryptoId(),
+        name: normalizedName,
+        category: detectedCategory ?? category,
+        sets: [],
+      };
       return { ...prev, [viewDate]: { ...existing, exercises: [...existing.exercises, ex] } };
     });
+  }
+
+  function updateDraftName(name: string) {
+    const detectedCategory = getExerciseCategory(name);
+    setDraft((prev) => ({
+      ...prev,
+      name,
+      category: detectedCategory ?? prev.category,
+    }));
   }
 
   function addSetsToExercise(exId: string, weight: number, reps: number, count: number) {
@@ -146,22 +172,31 @@ export default function Workouts() {
 
       <div className="section-title">Add exercise</div>
       <div className="card">
-        <label className="field-label">Name</label>
+        <label className="field-label" htmlFor="exercise-name">
+          Name
+        </label>
         <input
+          id="exercise-name"
           className="text-input"
+          list={EXERCISE_CATALOG_ID}
           placeholder="e.g. Hammer Pullover Pull"
           value={draft.name}
-          onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+          onChange={(e) => updateDraftName(e.target.value)}
         />
+        <datalist id={EXERCISE_CATALOG_ID}>
+          {CANONICAL_EXERCISES.map((exercise) => (
+            <option key={exercise} value={exercise} />
+          ))}
+        </datalist>
         <label className="field-label" style={{ marginTop: 10 }}>
           Category
         </label>
         <div className="chip-group">
-          {CATEGORIES.map((c) => (
+          {EXERCISE_CATEGORIES.map((c) => (
             <button
               key={c}
               className={`chip ${draft.category === c ? 'active' : ''}`}
-              onClick={() => setDraft({ ...draft, category: c })}
+              onClick={() => setDraft((prev) => ({ ...prev, category: c }))}
             >
               {c}
             </button>
@@ -331,8 +366,10 @@ function collectRecentExerciseNames(days: Record<string, WorkoutDay>) {
   for (const key of Object.keys(days).sort().reverse()) {
     for (const ex of days[key].exercises) {
       if (ex.sets.length === 0) continue;
-      if (!seen.has(ex.name)) {
-        seen.set(ex.name, { name: ex.name, category: ex.category, lastDate: key });
+      const normalizedName = normalizeExerciseName(ex.name);
+      if (!normalizedName) continue;
+      if (!seen.has(normalizedName)) {
+        seen.set(normalizedName, { name: normalizedName, category: ex.category, lastDate: key });
       }
     }
   }
