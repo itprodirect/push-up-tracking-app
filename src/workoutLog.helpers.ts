@@ -46,7 +46,8 @@ export function filterDaysInRange(
   for (const key of keys) {
     if (startKey && key < startKey) continue;
     const day = days[key];
-    if (day.exercises.length > 0) result.push(day);
+    const exercises = day.exercises.filter((ex) => ex.sets.length > 0);
+    if (exercises.length > 0) result.push({ ...day, exercises });
   }
   return result;
 }
@@ -59,11 +60,15 @@ export type RangeSummary = {
 };
 
 export function summarize(rangeDays: WorkoutDay[]): RangeSummary {
+  let workoutCount = 0;
   let totalVolume = 0;
   let totalSets = 0;
   const byName = new Map<string, { name: string; count: number; volume: number }>();
   for (const day of rangeDays) {
+    let hasLoggedExercise = false;
     for (const ex of day.exercises) {
+      if (ex.sets.length === 0) continue;
+      hasLoggedExercise = true;
       const v = exerciseVolume(ex);
       totalVolume += v;
       totalSets += ex.sets.length;
@@ -72,12 +77,13 @@ export function summarize(rangeDays: WorkoutDay[]): RangeSummary {
       existing.volume += v;
       byName.set(ex.name, existing);
     }
+    if (hasLoggedExercise) workoutCount++;
   }
   const topExercises = Array.from(byName.values())
     .sort((a, b) => b.volume - a.volume)
     .slice(0, 3);
   return {
-    workoutCount: rangeDays.length,
+    workoutCount,
     totalVolume,
     totalSets,
     topExercises,
