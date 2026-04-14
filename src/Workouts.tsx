@@ -15,6 +15,7 @@ import {
   CANONICAL_EXERCISES,
   EXERCISE_CATEGORIES,
   getExerciseCategory,
+  isKnownExercise,
   normalizeExerciseName,
 } from './exerciseCatalog';
 
@@ -214,8 +215,13 @@ export default function Workouts() {
             </div>
             <div className="chip-group">
               {recentNames.slice(0, 8).map((r) => (
-                <button key={r.name} className="chip" onClick={() => quickAddExercise(r.name, r.category)}>
-                  + {r.name}
+                <button
+                  key={r.name}
+                  className={`chip suggestion-chip ${r.kind}`}
+                  onClick={() => quickAddExercise(r.name, r.category)}
+                >
+                  <span className="chip-label">+ {r.name}</span>
+                  <span className={`chip-badge ${r.kind}`}>{r.kind === 'catalog' ? 'Catalog' : 'Custom'}</span>
                 </button>
               ))}
             </div>
@@ -362,18 +368,34 @@ function ExerciseCard({
 }
 
 function collectRecentExerciseNames(days: Record<string, WorkoutDay>) {
-  const seen = new Map<string, { name: string; category: WorkoutExercise['category']; lastDate: string }>();
+  const seen = new Map<
+    string,
+    {
+      name: string;
+      category: WorkoutExercise['category'];
+      kind: 'catalog' | 'custom';
+      lastDate: string;
+    }
+  >();
   for (const key of Object.keys(days).sort().reverse()) {
     for (const ex of days[key].exercises) {
       if (ex.sets.length === 0) continue;
       const normalizedName = normalizeExerciseName(ex.name);
       if (!normalizedName) continue;
       if (!seen.has(normalizedName)) {
-        seen.set(normalizedName, { name: normalizedName, category: ex.category, lastDate: key });
+        seen.set(normalizedName, {
+          name: normalizedName,
+          category: ex.category,
+          kind: isKnownExercise(ex.name) ? 'catalog' : 'custom',
+          lastDate: key,
+        });
       }
     }
   }
-  return Array.from(seen.values());
+  const values = Array.from(seen.values());
+  const catalog = values.filter((item) => item.kind === 'catalog');
+  const custom = values.filter((item) => item.kind === 'custom');
+  return [...catalog, ...custom];
 }
 
 function buildVolumeHistory(
