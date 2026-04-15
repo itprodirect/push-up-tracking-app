@@ -4,7 +4,7 @@ This backlog tracks the next practical follow-up after the merged Supabase v1 pe
 
 ## P0 Immediate Next Work
 
-1. [#14 Define and implement auth path for external beta](https://github.com/itprodirect/push-up-tracking-app/issues/14)
+1. [#14 Define minimal auth path required before external beta](https://github.com/itprodirect/push-up-tracking-app/issues/14)
    - Preferred direction: Supabase Auth (aligns with existing Supabase backend)
    - Clerk deferred unless future product requirements justify it
 2. [#18 Add error handling/loading states for cloud save/load](https://github.com/itprodirect/push-up-tracking-app/issues/18)
@@ -28,7 +28,7 @@ This backlog tracks the next practical follow-up after the merged Supabase v1 pe
 - Preserve `app.tab` as local-only state unless a future issue changes that intentionally.
 - Keep localStorage fallback until removal is planned and validated explicitly.
 - Revisit same-day local-over-remote conflict behavior before broader rollout.
-- Auth is the next primary implementation lane. Supabase Auth is the preferred path; Clerk is deferred unless justified.
+- Auth is the next primary lane. Supabase Auth is the preferred path; Clerk is deferred unless justified.
 
 ## Issue Template Standard
 

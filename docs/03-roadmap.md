@@ -14,9 +14,9 @@ Related issues: [#9](https://github.com/itprodirect/push-up-tracking-app/issues/
 
 _Auth foundation and rollout hardening._
 
-- Define and implement auth path for external beta → [#14](https://github.com/itprodirect/push-up-tracking-app/issues/14)
-  - Preferred direction: Supabase Auth (see decision log)
-  - Clerk deferred unless future product requirements justify it
+- Define minimal auth path required before external beta → [#14](https://github.com/itprodirect/push-up-tracking-app/issues/14)
+- Preferred direction: Supabase Auth (see decision log)
+- Clerk deferred unless future product requirements justify it
 - Add error handling and loading states for cloud save/load → [#18](https://github.com/itprodirect/push-up-tracking-app/issues/18)
 - Clean up environment and deployment documentation → [#17](https://github.com/itprodirect/push-up-tracking-app/issues/17)
 
@@ -26,7 +26,6 @@ _Beta readiness and supporting features._
 
 - Add historical workout views and cloud aggregation validation → [#16](https://github.com/itprodirect/push-up-tracking-app/issues/16)
 - Add data export and backup flow → [#15](https://github.com/itprodirect/push-up-tracking-app/issues/15)
-- Add environment variable and deployment documentation → [#17](https://github.com/itprodirect/push-up-tracking-app/issues/17)
 
 ## Later
 
@@ -41,7 +40,7 @@ _Evaluate after beta is stable._
 
 ### Solo Alpha → Limited Beta
 
-- Auth is selected and implemented (replaces hard-coded `owner_key = 'solo'`).
+- Auth path is selected and implemented (replaces hard-coded `owner_key = 'solo'`).
 - Cloud persistence is stable with acceptable error handling.
 - Deployment and environment docs are complete.
 - Backup/export paths exist or are explicitly scheduled.
