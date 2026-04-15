@@ -2,78 +2,75 @@
 
 ## Current Architecture
 
-```
-Browser (React SPA)
-  ├── UI: Vite + React + Recharts
-  ├── State: React component state
-  └── Persistence: localStorage (versioned keys)
+```text
+Browser (Vite + React SPA on Vercel)
+  -> React component state
+  -> localStorage (UI-local state + rollout fallback)
+  -> /api/persistence (Vercel serverless function)
+  -> Supabase v1 tables
 ```
 
-- No server-side code exists yet.
-- No API routes, no `/api` directory.
-- The browser owns all reads and writes directly to localStorage.
-- Data domains stored today: push-up entries, workout days, exercises, sets, exercise notes, user settings (daily goal).
-
-## Target Architecture
-
-```
-Browser (React SPA)
-  → Vercel frontend (static build)
-  → Vercel API routes / serverless functions
-  → DynamoDB (application records)
-  → S3 (file-oriented storage)
-```
+- Runtime remains a Vite + React SPA on Vercel, not a Next.js app.
+- The browser never calls Supabase directly.
+- Cloud persistence is mediated through `api/persistence.js` at `/api/persistence`.
+- Data domains currently handled by the cloud path: push-up day entries and workout day data.
 
 ### Frontend Boundary
 
-- Vite + React stays as-is on Vercel.
-- The frontend calls Vercel API routes for persistence — never AWS directly.
-- localStorage may remain as a local cache or offline fallback, but DynamoDB is the source of truth.
+- The frontend boots from local data first via `src/storage.ts`.
+- `src/cloudPersistence.ts` requests a remote snapshot from `/api/persistence` and merges it into local state on load.
+- Current same-day conflict behavior favors local data over remote when both exist for the same key.
+- `app.tab` remains local-only in `localStorage`.
+- Push-up goal settings still load and save locally today.
 
 ### Backend / API Boundary
 
-- Vercel API routes (`/api/*`) handle all server-side logic.
-- Routes own: request validation, persistence orchestration, response shaping.
-- AWS credentials live in Vercel environment variables, never in the browser.
+- `api/persistence.js` is a Vercel serverless function, not a Next.js route handler.
+- `GET /api/persistence` returns the current push-up and workout snapshot.
+- `POST /api/persistence` accepts `{ kind, day, ... }` payloads and persists the targeted day.
+- The endpoint owns normalization, day-scoped persistence behavior, and Supabase translation.
+- Supabase credentials live in Vercel environment variables, never in the browser.
 
-### DynamoDB Role
+### Supabase Role
 
-Primary application database. Source of truth for:
-- Workout days, exercises, sets
-- Push-up entries
-- Exercise-level and workout-day-level notes
-- User settings
+Supabase v1 is the current cloud persistence backend. Schema lives in:
 
-Planned key design: `pk=userId, sk=date` (or composite sort key per entity type). Set-level notes are deferred from the first cloud version.
+- `supabase/migrations/20260415172206_init_workout_persistence.sql`
 
-### S3 Role
+Current tables:
 
-Supporting storage layer (not the primary app database). Handles:
-- Data exports (JSON, CSV)
-- Backups and snapshots
-- AI-generated artifacts
-- Future attachments or media uploads
+- `user_settings`
+- `pushup_days`
+- `workout_days`
+- `workout_exercises`
+- `workout_sets`
+
+Current practical usage:
+
+- Workout data persists in normalized day / exercise / set tables.
+- Push-up persistence uses per-day rows in `pushup_days`.
+- The API also reads and writes `user_settings.pushup_settings` to preserve compatibility with the current push-up snapshot shape.
 
 ### Auth Status
 
 - No auth exists today.
-- Auth is **not required** for solo alpha (single trusted operator).
-- Auth **is required** before any external beta user.
-- Auth solution selection is deferred but must happen before beta rollout.
-- The API boundary should be designed so adding auth later is a middleware concern, not a rewrite.
+- The current runtime is single-owner only with `owner_key = 'solo'`.
+- Auth is still required before any external beta user.
+- Removing the hard-coded owner model is a follow-up, not part of Supabase v1.
 
-### localStorage Transition
+### localStorage During Rollout
 
-- localStorage is the only persistence mechanism today.
-- Storage keys are versioned (`*.v1`) to support future migration.
-- The migration path: frontend switches from direct localStorage calls to API calls. localStorage may remain as a local cache.
-- No batch migration of existing records is planned — normalization happens at save and read boundaries.
+- localStorage remains part of the runtime today.
+- It still stores browser-local state and acts as fallback during rollout.
+- The client loads local data first, then merges the remote snapshot from `/api/persistence`.
+- Writes remain local-first and then asynchronously post updates to the serverless endpoint.
 
 ## Intentionally Deferred
 
-- Direct browser → AWS access (always goes through Vercel API routes)
-- Set-level notes in the first cloud version
+- Direct browser -> Supabase access
+- Auth and multi-user ownership
+- Rich sync or conflict handling beyond current local-over-remote merge behavior
+- Removing localStorage fallback entirely
 - Rich attachment or media workflows
 - AI features that depend on cloud-stored history
-- Multi-user account management beyond limited beta
-- PWA / offline-first architecture
+- PWA or offline-first architecture
