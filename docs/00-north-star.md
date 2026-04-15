@@ -12,12 +12,12 @@ Later: a small number of trusted users who want simple, reliable workout logging
 
 ## Why It Matters
 
-Most fitness apps are overbuilt, ad-driven, or subscription-gated for basic tracking. This app exists to be a fast, focused tool that does logging and history well — and eventually backs it up to the cloud so data isn't trapped in one browser.
+Most fitness apps are overbuilt, ad-driven, or subscription-gated for basic tracking. This app exists to be a fast, focused tool that does logging and history well — backed by cloud persistence so data isn't trapped in one browser.
 
 ## What Good Looks Like (6–12 Months)
 
-- All workout data persists in DynamoDB, not just localStorage.
-- Exports and backups flow through S3.
+- All workout data persists in Supabase via the serverless persistence boundary.
+- Exports and backups exist for data durability.
 - The app works across devices for the same user.
 - At least 1–3 beta users are actively logging workouts.
 - Auth is in place — simple, not enterprise.
