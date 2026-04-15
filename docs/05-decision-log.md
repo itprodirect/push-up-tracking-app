@@ -94,4 +94,13 @@ Lightweight record of important product and architecture decisions.
 
 ---
 
+### 2026-04 - Supabase Auth as preferred next auth path
+
+**Context:** Auth is needed before any external beta user. The app already uses Supabase for persistence, so the auth provider choice affects integration complexity and the owner model transition.
+**Decision:** Prefer Supabase Auth as the next auth implementation. Defer Clerk unless future product requirements (e.g., richer identity features, SSO) justify the added dependency.
+**Why:** Supabase Auth integrates naturally with the existing Supabase backend, avoids adding a second external service, and keeps the auth boundary close to the persistence boundary. Row-level security can build directly on Supabase Auth user IDs.
+**Impact:** Auth planning and implementation should assume Supabase Auth. The `owner_key = 'solo'` model will be replaced by real user identity from Supabase Auth. Clerk remains a valid option if requirements change, but is not the default path.
+
+---
+
 _Add new decisions above this line. Use the same format._

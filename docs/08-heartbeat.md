@@ -8,9 +8,9 @@ Solo alpha with Supabase v1 persistence live in production. One user dogfooding 
 
 ## Top Priorities
 
-1. Stabilize Supabase rollout behavior, especially cloud error visibility and same-day conflict handling -> #18
-2. Clean up environment and deployment documentation around the shipped Vercel + Supabase path -> #17
-3. Define the auth path that replaces the current hard-coded solo owner model before any external beta -> #14
+1. Define and implement auth foundation to replace hard-coded `owner_key = 'solo'` -> #14 (preferred path: Supabase Auth)
+2. Stabilize Supabase rollout behavior, especially cloud error visibility and same-day conflict handling -> #18
+3. Clean up environment and deployment documentation around the shipped Vercel + Supabase path -> #17
 
 ## Actively Dogfooding
 
@@ -31,8 +31,8 @@ Solo alpha with Supabase v1 persistence live in production. One user dogfooding 
 
 ## Recommended Issue Order
 
-1. #18 - Error handling and loading states for cloud save/load
-2. #17 - Environment and deployment documentation
-3. #14 - Auth path for beta
+1. #14 - Auth foundation (Supabase Auth preferred)
+2. #18 - Error handling and loading states for cloud save/load
+3. #17 - Environment and deployment documentation
 4. #16 - Historical views and cloud aggregation validation
 5. #15 - Export and backup path
