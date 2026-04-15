@@ -19,6 +19,11 @@ npm test
 npm run build
 ```
 
+## Deployment
+
+The app is currently deployed as a standard web app build from Vite + React.
+Offline/installable PWA behavior is not part of the current deployment.
+
 ## Workout Entry Flow
 
 The workout screen in [src/Workouts.tsx](/C:/Users/user/push-up-tracking-app/src/Workouts.tsx) now supports both structured exercise entry and manual entry.

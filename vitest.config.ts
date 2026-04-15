@@ -2,8 +2,6 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 
-// Separate config for tests so the PWA plugin (which does heavy manifest work)
-// stays out of the test runner. Keeps `vitest run` fast.
 export default defineConfig({
   plugins: [react()],
   test: {
