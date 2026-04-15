@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  CLOUD_PERSISTENCE_ENABLED,
+  loadPersistenceSnapshot,
+  mergeEntriesWithLocalFallback,
+  savePushupEntries,
+} from './cloudPersistence';
 import {
   DayEntry,
   loadEntries,
@@ -16,9 +22,46 @@ export default function PushUps() {
   const [range, setRange] = useState<TrendRange>(30);
   const [showSettings, setShowSettings] = useState(false);
   const [viewDate, setViewDate] = useState<string>(() => todayKey());
+  const [cloudReady, setCloudReady] = useState(() => !CLOUD_PERSISTENCE_ENABLED);
+  const skipNextCloudSave = useRef(false);
+  const pendingCloudDay = useRef<string | null>(null);
 
   useEffect(() => saveEntries(entries), [entries]);
   useEffect(() => saveSettings(settings), [settings]);
+
+  useEffect(() => {
+    if (!CLOUD_PERSISTENCE_ENABLED) return;
+
+    let cancelled = false;
+
+    void (async () => {
+      const snapshot = await loadPersistenceSnapshot();
+      if (cancelled) return;
+
+      if (snapshot && Object.keys(snapshot.entries).length > 0) {
+        skipNextCloudSave.current = true;
+        setEntries((prev) => mergeEntriesWithLocalFallback(snapshot.entries, prev));
+      }
+
+      setCloudReady(true);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!cloudReady) return;
+    if (skipNextCloudSave.current) {
+      skipNextCloudSave.current = false;
+      return;
+    }
+    const day = pendingCloudDay.current;
+    if (!day) return;
+    pendingCloudDay.current = null;
+    void savePushupEntries(day, entries[day] ?? null);
+  }, [cloudReady, entries]);
 
   const isToday = viewDate === todayKey();
   const entry = entries[viewDate];
@@ -26,6 +69,7 @@ export default function PushUps() {
   const progress = Math.min(100, (total / settings.dailyGoal) * 100);
 
   function addSet(n: number) {
+    pendingCloudDay.current = viewDate;
     setEntries((prev) => {
       const existing = prev[viewDate] ?? { date: viewDate, sets: [] };
       return {
@@ -36,6 +80,7 @@ export default function PushUps() {
   }
 
   function removeSetAt(idx: number) {
+    pendingCloudDay.current = viewDate;
     setEntries((prev) => {
       const existing = prev[viewDate];
       if (!existing) return prev;
