@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  CLOUD_PERSISTENCE_ENABLED,
+  loadPersistenceSnapshot,
+  mergeWorkoutsWithLocalFallback,
+  saveWorkoutDays,
+} from './cloudPersistence';
 import {
   WorkoutDay,
   WorkoutExercise,
@@ -30,8 +36,45 @@ export default function Workouts() {
     name: '',
     category: EXERCISE_CATEGORIES[0] as WorkoutExercise['category'],
   });
+  const [cloudReady, setCloudReady] = useState(() => !CLOUD_PERSISTENCE_ENABLED);
+  const skipNextCloudSave = useRef(false);
+  const pendingCloudDay = useRef<string | null>(null);
 
   useEffect(() => saveWorkouts(days), [days]);
+
+  useEffect(() => {
+    if (!CLOUD_PERSISTENCE_ENABLED) return;
+
+    let cancelled = false;
+
+    void (async () => {
+      const snapshot = await loadPersistenceSnapshot();
+      if (cancelled) return;
+
+      if (snapshot && Object.keys(snapshot.workouts).length > 0) {
+        skipNextCloudSave.current = true;
+        setDays((prev) => mergeWorkoutsWithLocalFallback(snapshot.workouts, prev));
+      }
+
+      setCloudReady(true);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!cloudReady) return;
+    if (skipNextCloudSave.current) {
+      skipNextCloudSave.current = false;
+      return;
+    }
+    const day = pendingCloudDay.current;
+    if (!day) return;
+    pendingCloudDay.current = null;
+    void saveWorkoutDays(day, days[day] ?? null);
+  }, [cloudReady, days]);
 
   const isToday = viewDate === todayKey();
   const day = days[viewDate];
@@ -42,6 +85,7 @@ export default function Workouts() {
   function addExercise() {
     const name = normalizeExerciseName(draft.name);
     if (!name) return;
+    pendingCloudDay.current = viewDate;
     setDays((prev) => {
       const existing = prev[viewDate] ?? { date: viewDate, exercises: [] };
       const ex: WorkoutExercise = {
@@ -59,6 +103,7 @@ export default function Workouts() {
     const normalizedName = normalizeExerciseName(name);
     if (!normalizedName) return;
     const detectedCategory = getExerciseCategory(normalizedName);
+    pendingCloudDay.current = viewDate;
     setDays((prev) => {
       const existing = prev[viewDate] ?? { date: viewDate, exercises: [] };
       const ex: WorkoutExercise = {
@@ -91,6 +136,7 @@ export default function Workouts() {
     ) {
       return;
     }
+    pendingCloudDay.current = viewDate;
     setDays((prev) => {
       const existing = prev[viewDate];
       if (!existing) return prev;
@@ -105,6 +151,7 @@ export default function Workouts() {
   }
 
   function removeLastSet(exId: string) {
+    pendingCloudDay.current = viewDate;
     setDays((prev) => {
       const existing = prev[viewDate];
       if (!existing) return prev;
@@ -122,6 +169,7 @@ export default function Workouts() {
   }
 
   function removeExercise(exId: string) {
+    pendingCloudDay.current = viewDate;
     setDays((prev) => {
       const existing = prev[viewDate];
       if (!existing) return prev;
