@@ -5,9 +5,11 @@ _Last updated: April 2026_
 ## What Is Live
 
 - **Frontend:** Vite + React single-page app deployed on Vercel.
-- **Persistence:** Browser `localStorage` only. No cloud backend.
+- **Persistence:** Vercel serverless endpoint at `/api/persistence` backed by Supabase v1 tables.
+- **Rollout fallback:** Browser `localStorage` remains active for local-first loading and cloud fallback during rollout.
+- **Local-only state:** `app.tab` remains browser-local. Push-up daily goal still loads and saves locally.
 - **Deployment:** Standard Vercel web app build. Not a PWA.
-- **Testing:** Vitest test suite with coverage support.
+- **Validation:** Manual Preview validation passed, including cross-browser and incognito checks. Production deployment succeeded after merge.
 
 ## What Works Today
 
@@ -17,21 +19,23 @@ _Last updated: April 2026_
 - Recent exercise suggestions with dedup and normalization.
 - Trend chart for push-up history (Recharts).
 - Workout summary and aggregation helpers.
-- All data stored in versioned localStorage keys (`pushup.entries.v1`, etc.).
+- Push-up day changes and workout day changes save through `/api/persistence`.
+- Supabase v1 schema exists for `user_settings`, `pushup_days`, `workout_days`, `workout_exercises`, and `workout_sets`.
+- Day-scoped persistence behavior is in place at the API boundary for the current rollout path.
 - Legacy category labels (`push`, `pull`, `legs`) load correctly into current labels.
 
 ## What Is Limited or Intentionally Incomplete
 
-- **No cloud persistence.** Data lives only in the browser. Clearing storage = data loss.
-- **No cross-device sync.** A different browser or device has no access to existing data.
-- **No auth.** The app has no user identity concept.
-- **No exports or backups.** No way to save data outside the browser.
-- **No error handling for storage failures.** localStorage writes are fire-and-forget.
-- **No API routes.** There is no `/api` directory or Vercel serverless function yet.
+- **No auth.** The app is still in single-owner mode with `owner_key = 'solo'`.
+- **Local-over-remote same-day conflicts still favor local data.** Initial merge behavior keeps local values when the same day exists in both places.
+- **localStorage fallback is still part of the rollout.** Cloud saves are not yet the only active persistence path.
+- **Some state is still local-only.** `app.tab` and push-up goal settings are not cloud-backed today.
+- **Cloud save failure visibility is limited.** The app still prioritizes quiet fallback over explicit error UX.
+- **No exports or backups.** No file-level export or backup path is live yet.
 
 ## Current Phase
 
-**Solo alpha / dogfooding.** One user (Nick) is actively using the app to log workouts. The goal is to stabilize the frontend experience and build cloud persistence infrastructure.
+**Solo alpha / dogfooding with Supabase v1 live.** One user (Nick) is actively using the app to log workouts. The next goal is to stabilize the cloud rollout, document the shipped behavior cleanly, and address remaining auth and sync follow-up.
 
 ## Key Files
 
@@ -40,7 +44,10 @@ _Last updated: April 2026_
 | Push-up logging | `src/PushUps.tsx` |
 | Workout logging | `src/Workouts.tsx` |
 | Exercise catalog | `src/exerciseCatalog.ts` |
-| Storage layer | `src/storage.ts` |
+| Local storage layer | `src/storage.ts` |
+| Cloud persistence client | `src/cloudPersistence.ts` |
+| Serverless persistence boundary | `api/persistence.js` |
+| Supabase schema | `supabase/migrations/20260415172206_init_workout_persistence.sql` |
 | Trend chart | `src/TrendChart.tsx` |
 | Workout helpers | `src/workoutLog.helpers.ts` |
 | Tests | `*.test.ts`, `*.test.tsx` |
