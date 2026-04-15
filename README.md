@@ -24,6 +24,26 @@ npm run build
 The app is currently deployed as a standard web app build from Vite + React.
 Offline/installable PWA behavior is not part of the current deployment.
 
+## Current State
+
+- The frontend is deployed on Vercel as a standard web app.
+- Persistence is still browser-local via `localStorage`.
+- There is no production cloud persistence layer yet.
+- AWS should be introduced through server-side Vercel functions or API routes, not direct browser access.
+
+## Current Limitations
+
+- Data is tied to a browser profile and does not sync across devices.
+- Browser storage is not a reliable backup or recovery path.
+- There is no authenticated multi-user model yet.
+- Exports, backups, and generated artifacts do not have a dedicated cloud storage layer.
+
+## Cloud Persistence Docs
+
+- [Architecture](./docs/architecture.md)
+- [Roadmap](./docs/roadmap.md)
+- [Backlog](./docs/backlog.md)
+
 ## Workout Entry Flow
 
 The workout screen in [src/Workouts.tsx](/C:/Users/user/push-up-tracking-app/src/Workouts.tsx) now supports both structured exercise entry and manual entry.
