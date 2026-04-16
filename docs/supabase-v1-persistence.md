@@ -7,19 +7,22 @@ Canonical reference for the shipped Supabase-backed persistence path now live in
 ## What Shipped
 
 - The app runtime remains a Vite + React SPA deployed on Vercel.
+- Supabase Auth v0 now gates the app UI behind approved-user email magic-link sign-in.
+- Session restore and sign-out are live.
 - Cloud persistence now flows through the Vercel serverless endpoint at `/api/persistence`.
+- `/api/persistence` now requires a valid Supabase bearer token.
 - Supabase v1 schema and tables are in place for push-up and workout persistence.
 - Writes were changed from broad owner-level replacement toward day-scoped persistence behavior at the API boundary.
-- Preview validation passed, including cross-browser and incognito verification.
-- Production deployment succeeded after the feature PR merged to `main`.
 
 ## Runtime Flow
 
 1. The client loads local state from `src/storage.ts`.
-2. `src/cloudPersistence.ts` requests a remote snapshot from `/api/persistence`.
-3. The client merges remote data into local state on boot.
-4. If both local and remote contain the same day key, local data currently wins.
-5. User edits save locally first and then asynchronously post updates back to `/api/persistence`.
+2. `src/cloudPersistence.ts` reads the current Supabase access token only when cloud persistence is actually used.
+3. `src/cloudPersistence.ts` requests a remote snapshot from `/api/persistence` with `Authorization: Bearer <token>`.
+4. The serverless boundary validates the bearer token before reading or writing persistence data.
+5. The client merges remote data into local state on boot.
+6. If both local and remote contain the same day key, local data currently wins.
+7. User edits save locally first and then asynchronously post updates back to `/api/persistence`.
 
 ## Current Cloud Boundary
 
@@ -27,7 +30,7 @@ Canonical reference for the shipped Supabase-backed persistence path now live in
 - Client integration: `src/cloudPersistence.ts`
 - Schema definition: `supabase/migrations/20260415172206_init_workout_persistence.sql`
 
-`/api/persistence` is the only cloud persistence boundary. The browser does not call Supabase directly.
+`/api/persistence` is the only cloud persistence boundary for application data. The browser does not call Supabase tables directly.
 
 ## Current Schema
 
@@ -50,21 +53,16 @@ Current runtime behavior:
 - `app.tab` remains local-only in `localStorage`.
 - Push-up daily goal settings still remain local-only.
 - localStorage fallback remains enabled during rollout.
-- No auth exists yet.
+- Auth v0 is live and closes public UI access.
 - Ownership is still hard-coded to `owner_key = 'solo'`.
+- Auth protects the persistence API, but persisted data is not yet partitioned per authenticated user.
 - Same-day local-over-remote conflict behavior still exists on initial merge.
-
-## What Was Validated
-
-- Preview environment worked end to end.
-- Cross-browser verification passed.
-- Incognito verification passed.
-- Production deployment succeeded after merge.
 
 ## Follow-Up That Still Remains
 
 - Add clearer error handling and loading states for cloud save/load.
-- Replace the current hard-coded solo owner model with a real auth path before any external beta.
+- Replace the current hard-coded solo owner model with user-scoped persistence tied to the authenticated user.
+- Add SMTP/custom email provider setup and auth rate-limit hardening when moving beyond the current minimal auth gate.
 - Decide whether and when to remove localStorage fallback.
 - Revisit same-day local-over-remote conflict behavior.
 - Decide whether push-up goal settings should stay local-only or move into the cloud path.

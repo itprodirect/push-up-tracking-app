@@ -1,6 +1,6 @@
 # Push-Up Tracking App
 
-Vite + React workout tracker with push-up logging and machine/free-weight exercise logging. Deployed on Vercel with Supabase-backed persistence through a Vercel serverless endpoint and a localStorage rollout fallback.
+Vite + React workout tracker with push-up logging and machine/free-weight exercise logging. Deployed on Vercel with Supabase-backed persistence through a Vercel serverless endpoint, Supabase Auth v0 for sign-in gating, and a localStorage rollout fallback.
 
 ## Run Locally
 
@@ -36,10 +36,13 @@ npm run build
 ## Current State
 
 - Frontend runtime is a Vite + React SPA deployed on Vercel.
-- Cloud persistence flows through `api/persistence.js` at `/api/persistence`.
+- Supabase Auth v0 gates the app UI behind approved-user email magic-link sign-in.
+- Session restore and sign-out are live.
+- Cloud persistence flows through `api/persistence.js` at `/api/persistence`, uses day-scoped writes, and now requires a valid Supabase bearer token.
 - Supabase v1 schema and tables are in place for push-up and workout persistence.
 - `app.tab` remains local-only, and localStorage fallback remains enabled during rollout.
-- No auth yet; the current owner model is still hard-coded to `solo`.
+- Persistence is still temporarily single-owner via `owner_key = 'solo'`; data is not yet partitioned per authenticated user.
+- SMTP/custom email provider setup and auth rate-limit hardening are intentionally deferred.
 
 See [docs/01-current-state.md](./docs/01-current-state.md) and [docs/supabase-v1-persistence.md](./docs/supabase-v1-persistence.md) for details.
 

@@ -6,6 +6,8 @@ Durable constraints, patterns, and assumptions that any agent working in this re
 
 - The app is live on Vercel at a production URL.
 - The app is a Vite + React SPA. No SSR, no framework router.
+- Supabase Auth v0 gates the UI behind approved-user email magic-link sign-in.
+- Session restore and sign-out are part of the shipped runtime.
 - The runtime cloud path is `api/persistence.js` at `/api/persistence`, backed by Supabase.
 - `localStorage` is still part of the runtime for local-first loading, rollout fallback, and local-only state.
 - localStorage keys are versioned (`.v1` suffix) to support future migration.
@@ -17,10 +19,11 @@ Durable constraints, patterns, and assumptions that any agent working in this re
 ## Architecture Constraints
 
 - Supabase is the current v1 persistence backend for the live app.
-- The browser must never call Supabase directly. All cloud persistence goes through `/api/persistence`.
+- The browser must never call Supabase data tables directly. All cloud persistence goes through `/api/persistence`.
 - Supabase credentials live in Vercel environment variables, never in client code.
-- Auth is required before any external beta user. Solo alpha can operate without auth temporarily.
+- `/api/persistence` requires a valid Supabase bearer token.
 - The current owner model is hard-coded to `owner_key = 'solo'`.
+- Persisted data is not yet partitioned per authenticated user.
 - Current same-day merge behavior favors local data over remote data when both exist.
 
 ## Development Constraints
@@ -28,14 +31,14 @@ Durable constraints, patterns, and assumptions that any agent working in this re
 - Keep changes scoped to the issue being worked. Don't combine unrelated changes.
 - Don't add dependencies without explicit approval.
 - Don't introduce new architectural patterns that are not documented in `02-architecture.md`.
-- Don't assume auth, multi-user, or cloud features exist beyond what `01-current-state.md` documents.
+- Don't assume user-scoped persistence, SMTP/custom email-provider setup, or localStorage fallback removal exist beyond what `01-current-state.md` documents.
 - Normalization happens at save and read boundaries, not through batch storage migrations.
 
 ## Rollout Rules
 
 - Dogfood first. Every feature gets real use by the builder before reaching anyone else.
 - Beta users are added one at a time, deliberately.
-- No external beta without auth.
+- No external beta without replacing `owner_key = 'solo'` with user-scoped persistence.
 - Keep the user count low until persistence, error handling, and backups are solid.
 
 ## Patterns to Preserve
