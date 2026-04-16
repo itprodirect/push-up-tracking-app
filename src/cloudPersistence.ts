@@ -1,4 +1,5 @@
 import { DayEntry, WorkoutDay } from './storage';
+import { supabase } from './supabaseClient';
 
 export const CLOUD_PERSISTENCE_ENABLED = import.meta.env.MODE !== 'test';
 
@@ -11,9 +12,16 @@ export async function loadPersistenceSnapshot(): Promise<PersistenceSnapshot | n
   if (!CLOUD_PERSISTENCE_ENABLED) return null;
 
   try {
+    const accessToken = await getAccessToken();
+    if (!accessToken) return null;
+
     const response = await fetch('/api/persistence', {
-      headers: { Accept: 'application/json' },
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
     });
+    if (response.status === 401) return null;
     if (!response.ok) return null;
 
     const payload = await response.json();
@@ -52,13 +60,33 @@ export function mergeWorkoutsWithLocalFallback(
 
 async function postPersistence(body: unknown): Promise<void> {
   try {
-    await fetch('/api/persistence', {
+    const accessToken = await getAccessToken();
+    if (!accessToken) return;
+
+    const response = await fetch('/api/persistence', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
       body: JSON.stringify(body),
     });
+
+    if (response.status === 401 || !response.ok) {
+      return;
+    }
   } catch {
     // Keep localStorage as the fallback source of truth during rollout.
+  }
+}
+
+async function getAccessToken(): Promise<string | null> {
+  try {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) return null;
+    return data.session?.access_token ?? null;
+  } catch {
+    return null;
   }
 }
 
