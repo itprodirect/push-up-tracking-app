@@ -5,14 +5,6 @@ const { getSession } = vi.hoisted(() => ({
   getSession: vi.fn(),
 }));
 
-vi.mock('./supabaseClient', () => ({
-  supabase: {
-    auth: {
-      getSession,
-    },
-  },
-}));
-
 describe('cloudPersistence auth headers and fallback', () => {
   const fetchMock = vi.fn();
 
@@ -22,6 +14,13 @@ describe('cloudPersistence auth headers and fallback', () => {
     vi.stubGlobal('fetch', fetchMock);
     fetchMock.mockReset();
     getSession.mockReset();
+    vi.doMock('./supabaseClient', () => ({
+      supabase: {
+        auth: {
+          getSession,
+        },
+      },
+    }));
   });
 
   afterEach(() => {
@@ -36,6 +35,30 @@ describe('cloudPersistence auth headers and fallback', () => {
 
     await expect(loadPersistenceSnapshot()).resolves.toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('does not load the Supabase client during module import in test mode', async () => {
+    const loadMarker = vi.fn();
+
+    vi.resetModules();
+    vi.unstubAllEnvs();
+    vi.stubEnv('MODE', 'test');
+    vi.doMock('./supabaseClient', () => {
+      loadMarker();
+      return {
+        supabase: {
+          auth: {
+            getSession: vi.fn(),
+          },
+        },
+      };
+    });
+
+    const { CLOUD_PERSISTENCE_ENABLED, loadPersistenceSnapshot } = await import('./cloudPersistence');
+
+    expect(CLOUD_PERSISTENCE_ENABLED).toBe(false);
+    await expect(loadPersistenceSnapshot()).resolves.toBeNull();
+    expect(loadMarker).not.toHaveBeenCalled();
   });
 
   it('sends the bearer token on cloud load requests', async () => {
