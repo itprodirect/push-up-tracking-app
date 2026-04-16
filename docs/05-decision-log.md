@@ -4,6 +4,33 @@ Lightweight record of important product and architecture decisions.
 
 ---
 
+### 2026-04 - Supabase Auth v0 closes public UI access
+
+**Context:** The app needed a minimal real auth path before continuing beyond a trusted public UI. Supabase was already the live persistence backend, so the smallest integrated auth path mattered more than broad auth feature depth.
+**Decision:** Ship Supabase Auth v0 with approved-user email magic-link sign-in, session restore, and sign-out.
+**Why:** This closes public UI access with minimal architecture churn and keeps the auth boundary aligned with the existing Supabase integration.
+**Impact:** Current-state and architecture docs should assume auth is live. Future auth work should build from this minimal shipped path rather than from a no-auth baseline.
+
+---
+
+### 2026-04 - Protect `/api/persistence` with Supabase bearer-token verification while keeping `owner_key = 'solo'`
+
+**Context:** Auth v0 gated the UI, but the persistence API also needed protection without expanding scope into schema changes or a full ownership migration.
+**Decision:** Require a valid Supabase bearer token for `GET` and `POST` requests to `/api/persistence`, while keeping the temporary single-owner model `owner_key = 'solo'`.
+**Why:** This protects the serverless persistence boundary immediately and preserves the minimal slice size needed for rollout.
+**Impact:** The persistence API is now auth-protected, but data is still not partitioned per authenticated user. The next major data/auth slice should replace `solo` with user-scoped persistence.
+
+---
+
+### 2026-04 - Defer SMTP/custom email provider setup and auth hardening beyond auth v0
+
+**Context:** The auth v0 goal was to close public UI access and protect the current persistence boundary, not to finish full production-grade auth operations.
+**Decision:** Defer SMTP/custom email provider setup, branded/authenticated mail delivery work, and auth rate-limit hardening to follow-up work.
+**Why:** Those pieces were not required to ship the minimal auth gate and would have expanded scope significantly.
+**Impact:** Docs should describe the current auth stack as live but intentionally minimal. Broader beta-readiness work still needs mail and auth hardening decisions.
+
+---
+
 ### 2026-04 - Supabase as shipped v1 persistence backend
 
 **Context:** Earlier planning docs assumed a Vercel + AWS path. The merged persistence implementation that is now live in production uses Supabase behind a Vercel serverless boundary.
@@ -69,10 +96,10 @@ Lightweight record of important product and architecture decisions.
 
 ### 2026-04 - Auth required before external beta
 
-**Context:** The app has no user identity today. Solo alpha can operate without auth because there is one trusted user.
+**Context:** Historical pre-auth planning note. At this stage the app had no user identity, and solo alpha could operate without auth because there was one trusted user.
 **Decision:** No external beta user will be added until a real auth path is in place.
 **Why:** Without auth, there is no way to isolate user data or protect the persistence boundary correctly.
-**Impact:** Auth selection is deferred in implementation but not in planning. The persistence boundary should be designed so auth can be added without a rewrite.
+**Impact:** This decision drove the later auth v0 implementation. The remaining beta gate is now replacing temporary `owner_key = 'solo'` storage with user-scoped persistence.
 
 ---
 
@@ -99,7 +126,7 @@ Lightweight record of important product and architecture decisions.
 **Context:** Auth is needed before any external beta user. The app already uses Supabase for persistence, so the auth provider choice affects integration complexity and the owner model transition.
 **Decision:** Prefer Supabase Auth as the next auth path for the current architecture and scope. Defer Clerk for now unless future product requirements justify the added dependency.
 **Why:** Supabase Auth integrates naturally with the existing Supabase backend, avoids adding a second external service, and keeps the auth boundary close to the persistence boundary. Row-level security can build directly on Supabase Auth user IDs.
-**Impact:** Auth planning should assume Supabase Auth as the default direction. The `owner_key = 'solo'` model will be replaced by real user identity from Supabase Auth. Clerk remains a valid option to revisit later if the product needs stronger out-of-the-box auth UX, orgs or teams support, or broader productized auth requirements.
+**Impact:** This preference is now implemented in auth v0. The `owner_key = 'solo'` model still needs to be replaced by real user-scoped persistence. Clerk remains a valid option to revisit later if the product needs stronger out-of-the-box auth UX, orgs or teams support, or broader productized auth requirements.
 
 ---
 

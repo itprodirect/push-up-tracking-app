@@ -6,19 +6,22 @@
 Browser (Vite + React SPA on Vercel)
   -> React component state
   -> localStorage (UI-local state + rollout fallback)
-  -> /api/persistence (Vercel serverless function)
+  -> Supabase Auth (approved-user magic link, session restore, sign-out)
+  -> /api/persistence (Vercel serverless function, bearer token required)
   -> Supabase v1 tables
 ```
 
 - Runtime remains a Vite + React SPA on Vercel, not a Next.js app.
-- The browser never calls Supabase directly.
+- The browser never calls Supabase data tables directly.
 - Cloud persistence is mediated through `api/persistence.js` at `/api/persistence`.
 - Data domains currently handled by the cloud path: push-up day entries and workout day data.
 
 ### Frontend Boundary
 
+- `src/Root.tsx` owns the auth gate, session restore, and sign-out flow.
 - The frontend boots from local data first via `src/storage.ts`.
 - `src/cloudPersistence.ts` requests a remote snapshot from `/api/persistence` and merges it into local state on load.
+- `src/cloudPersistence.ts` only loads the Supabase client when it actually needs an access token.
 - Current same-day conflict behavior favors local data over remote when both exist for the same key.
 - `app.tab` remains local-only in `localStorage`.
 - Push-up goal settings still load and save locally today.
@@ -29,6 +32,7 @@ Browser (Vite + React SPA on Vercel)
 - `GET /api/persistence` returns the current push-up and workout snapshot.
 - `POST /api/persistence` accepts `{ kind, day, ... }` payloads and persists the targeted day.
 - The endpoint owns normalization, day-scoped persistence behavior, and Supabase translation.
+- The endpoint requires `Authorization: Bearer <jwt>` and returns `401` for missing or invalid tokens.
 - Supabase credentials live in Vercel environment variables, never in the browser.
 
 ### Supabase Role
@@ -51,12 +55,14 @@ Current practical usage:
 - Push-up persistence uses per-day rows in `pushup_days`.
 - The API also reads and writes `user_settings.pushup_settings` to preserve compatibility with the current push-up snapshot shape.
 
-### Auth Status
+### Auth and Ownership Status
 
-- No auth exists today.
-- The current runtime is single-owner only with `owner_key = 'solo'`.
-- Auth is still required before any external beta user.
-- Removing the hard-coded owner model is a follow-up, not part of Supabase v1.
+- Supabase Auth v0 is live.
+- The UI is closed behind approved-user email magic-link sign-in.
+- Session restore and sign-out are part of the shipped runtime.
+- Persistence is auth-protected, but still single-owner via `owner_key = 'solo'`.
+- Authenticated users do not yet get user-scoped data partitioning.
+- Replacing the hard-coded owner model is the next major data/auth follow-up.
 
 ### localStorage During Rollout
 
@@ -67,10 +73,11 @@ Current practical usage:
 
 ## Intentionally Deferred
 
-- Direct browser -> Supabase access
-- Auth and multi-user ownership
+- Direct browser -> Supabase table access
+- User-scoped persistence and multi-user ownership
 - Rich sync or conflict handling beyond current local-over-remote merge behavior
 - Removing localStorage fallback entirely
+- SMTP/custom email provider setup and auth rate-limit hardening
 - Rich attachment or media workflows
 - AI features that depend on cloud-stored history
 - PWA or offline-first architecture
