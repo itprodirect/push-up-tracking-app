@@ -1,7 +1,7 @@
 import { DayEntry, WorkoutDay } from './storage';
-import { supabase } from './supabaseClient';
 
 export const CLOUD_PERSISTENCE_ENABLED = import.meta.env.MODE !== 'test';
+let supabaseModulePromise: Promise<typeof import('./supabaseClient')> | null = null;
 
 type PersistenceSnapshot = {
   entries: Record<string, DayEntry>;
@@ -82,12 +82,20 @@ async function postPersistence(body: unknown): Promise<void> {
 
 async function getAccessToken(): Promise<string | null> {
   try {
+    const { supabase } = await getSupabaseModule();
     const { data, error } = await supabase.auth.getSession();
     if (error) return null;
     return data.session?.access_token ?? null;
   } catch {
     return null;
   }
+}
+
+function getSupabaseModule() {
+  if (!supabaseModulePromise) {
+    supabaseModulePromise = import('./supabaseClient');
+  }
+  return supabaseModulePromise;
 }
 
 function normalizeEntries(value: unknown): Record<string, DayEntry> {
