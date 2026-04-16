@@ -1,5 +1,8 @@
+import { createClient } from '@supabase/supabase-js';
+
 const OWNER_KEY = 'solo';
 const PUSHUP_ENTRIES_KEY = 'entries';
+let authVerificationClient;
 
 export default async function handler(req, res) {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SECRET_KEY) {
@@ -8,6 +11,18 @@ export default async function handler(req, res) {
   }
 
   try {
+    const jwt = getBearerToken(req);
+    if (!jwt) {
+      res.status(401).json({ error: 'Missing or invalid bearer token.' });
+      return;
+    }
+
+    const isAuthorized = await verifyBearerToken(jwt);
+    if (!isAuthorized) {
+      res.status(401).json({ error: 'Invalid or expired bearer token.' });
+      return;
+    }
+
     if (req.method === 'GET') {
       const [entries, workouts] = await Promise.all([loadPushupEntries(), loadWorkouts()]);
       res.status(200).json({ entries, workouts });
@@ -41,6 +56,37 @@ export default async function handler(req, res) {
       error: error instanceof Error ? error.message : 'Unexpected persistence error.',
     });
   }
+}
+
+function getBearerToken(req) {
+  const authorization = req.headers?.authorization ?? req.headers?.Authorization;
+  if (typeof authorization !== 'string') return null;
+
+  const match = authorization.match(/^Bearer\s+(.+)$/i);
+  if (!match) return null;
+
+  const token = match[1].trim();
+  return token || null;
+}
+
+async function verifyBearerToken(jwt) {
+  const client = getAuthVerificationClient();
+  const { data, error } = await client.auth.getUser(jwt);
+  return !error && !!data?.user;
+}
+
+function getAuthVerificationClient() {
+  if (authVerificationClient) return authVerificationClient;
+
+  authVerificationClient = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SECRET_KEY, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  });
+
+  return authVerificationClient;
 }
 
 function parseBody(req) {
