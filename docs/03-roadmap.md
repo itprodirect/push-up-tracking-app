@@ -10,20 +10,20 @@ _Supabase v1 persistence and Supabase Auth v0 are live in production._
 - The app UI is now gated behind approved-user email magic-link sign-in
 - Session restore and sign-out are live
 - `/api/persistence` now requires a valid Supabase bearer token
+- Cloud reads and writes are now scoped to the authenticated Supabase user id
 
 Related issues: [#9](https://github.com/itprodirect/push-up-tracking-app/issues/9), [#10](https://github.com/itprodirect/push-up-tracking-app/issues/10), [#11](https://github.com/itprodirect/push-up-tracking-app/issues/11), [#13](https://github.com/itprodirect/push-up-tracking-app/issues/13)
 
 ## Now
 
-_Post-auth-v0 hardening and user-scoped persistence._
+_Post-user-scoped-persistence beta hardening._
 
-- Replace temporary `owner_key = 'solo'` persistence with data scoped to the authenticated user
+- Add SMTP/custom email provider setup and auth rate-limit hardening
 
 ## Next
 
-_Beta-readiness follow-up after user-scoped persistence._
+_Beta-readiness follow-up after auth hardening._
 
-- Add SMTP/custom email provider setup and auth rate-limit hardening
 - Add historical workout views and cloud aggregation validation -> [#16](https://github.com/itprodirect/push-up-tracking-app/issues/16)
 - Add data export and backup flow -> [#15](https://github.com/itprodirect/push-up-tracking-app/issues/15)
 
@@ -41,7 +41,7 @@ _Evaluate after beta is stable._
 ### Solo Alpha -> Limited Beta
 
 - Auth path is selected and implemented
-- Hard-coded `owner_key = 'solo'` is replaced by user-scoped persistence
+- Cloud persistence is scoped to the authenticated user
 - Cloud persistence is stable with acceptable error handling
 - Deployment and environment docs are complete
 - Backup/export paths exist or are explicitly scheduled

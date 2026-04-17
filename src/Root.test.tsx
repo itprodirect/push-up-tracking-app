@@ -3,18 +3,22 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import Root from './Root';
 
-const { getSession, onAuthStateChange, signInWithOtp, signOut, unsubscribe } = vi.hoisted(() => ({
+const { getSession, onAuthStateChange, signInWithOtp, signOut, unsubscribe, appRender } = vi.hoisted(() => ({
   getSession: vi.fn(),
   onAuthStateChange: vi.fn(),
   signInWithOtp: vi.fn(),
   signOut: vi.fn(),
   unsubscribe: vi.fn(),
+  appRender: vi.fn(),
 }));
 
 let authListener: ((event: string, session: any) => void) | null = null;
 
 vi.mock('./App', () => ({
-  default: () => <div>Existing app shell</div>,
+  default: ({ userId }: { userId: string }) => {
+    appRender(userId);
+    return <div>Existing app shell for {userId}</div>;
+  },
 }));
 
 vi.mock('./supabaseClient', () => ({
@@ -36,6 +40,7 @@ describe('Root auth gate', () => {
     onAuthStateChange.mockReset();
     signInWithOtp.mockReset();
     signOut.mockReset();
+    appRender.mockReset();
 
     getSession.mockResolvedValue({ data: { session: null }, error: null });
     onAuthStateChange.mockImplementation((callback: (event: string, session: any) => void) => {
@@ -69,7 +74,7 @@ describe('Root auth gate', () => {
     getSession.mockResolvedValue({
       data: {
         session: {
-          user: { email: 'approved@example.com' },
+          user: { id: 'user-a', email: 'approved@example.com' },
         },
       },
       error: null,
@@ -77,8 +82,9 @@ describe('Root auth gate', () => {
 
     render(<Root />);
 
-    expect(await screen.findByText(/existing app shell/i)).toBeInTheDocument();
+    expect(await screen.findByText(/existing app shell for user-a/i)).toBeInTheDocument();
     expect(screen.getByText(/approved@example.com/i)).toBeInTheDocument();
+    expect(appRender).toHaveBeenCalledWith('user-a');
     expect(screen.queryByRole('heading', { name: /sign in/i })).not.toBeInTheDocument();
   });
 
@@ -89,13 +95,41 @@ describe('Root auth gate', () => {
 
     await act(async () => {
       authListener?.('SIGNED_IN', {
-        user: { email: 'approved@example.com' },
+        user: { id: 'user-a', email: 'approved@example.com' },
       });
     });
 
-    expect(await screen.findByText(/existing app shell/i)).toBeInTheDocument();
+    expect(await screen.findByText(/existing app shell for user-a/i)).toBeInTheDocument();
     expect(screen.getByText(/approved@example.com/i)).toBeInTheDocument();
+    expect(appRender).toHaveBeenCalledWith('user-a');
     expect(screen.queryByRole('heading', { name: /sign in/i })).not.toBeInTheDocument();
+  });
+
+  it('passes the authenticated user id into the app shell after a user switch', async () => {
+    getSession.mockResolvedValue({
+      data: {
+        session: {
+          user: { id: 'user-a', email: 'approved@example.com' },
+        },
+      },
+      error: null,
+    });
+
+    render(<Root />);
+
+    expect(await screen.findByText(/existing app shell for user-a/i)).toBeInTheDocument();
+
+    await act(async () => {
+      authListener?.('SIGNED_IN', {
+        user: { id: 'user-b', email: 'another@example.com' },
+      });
+    });
+
+    expect(await screen.findByText(/existing app shell for user-b/i)).toBeInTheDocument();
+    expect(screen.queryByText(/existing app shell for user-a/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/another@example.com/i)).toBeInTheDocument();
+    expect(appRender).toHaveBeenNthCalledWith(1, 'user-a');
+    expect(appRender).toHaveBeenNthCalledWith(2, 'user-b');
   });
 
   it('sends a magic link for approved users only', async () => {
@@ -124,7 +158,7 @@ describe('Root auth gate', () => {
     getSession.mockResolvedValue({
       data: {
         session: {
-          user: { email: 'approved@example.com' },
+          user: { id: 'user-a', email: 'approved@example.com' },
         },
       },
       error: null,
@@ -132,7 +166,7 @@ describe('Root auth gate', () => {
 
     render(<Root />);
 
-    await screen.findByText(/existing app shell/i);
+    await screen.findByText(/existing app shell for user-a/i);
     await user.click(screen.getByRole('button', { name: /sign out/i }));
 
     expect(signOut).toHaveBeenCalledTimes(1);

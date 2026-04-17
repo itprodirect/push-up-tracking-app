@@ -4,13 +4,12 @@ This backlog tracks the next practical follow-up after the merged Supabase v1 pe
 
 ## P0 Immediate Next Work
 
-1. Replace temporary `owner_key = 'solo'` with user-scoped persistence keyed to the authenticated user
+1. Add SMTP/custom email provider setup and auth rate-limit hardening
 
 ## P1 Near-Term Follow-Up
 
-2. Add SMTP/custom email provider setup and auth rate-limit hardening
-3. [#16 Add historical workout views and aggregation validation against cloud data](https://github.com/itprodirect/push-up-tracking-app/issues/16)
-4. [#15 Add data export and backup flow](https://github.com/itprodirect/push-up-tracking-app/issues/15)
+2. [#16 Add historical workout views and aggregation validation against cloud data](https://github.com/itprodirect/push-up-tracking-app/issues/16)
+3. [#15 Add data export and backup flow](https://github.com/itprodirect/push-up-tracking-app/issues/15)
 
 ## P2 Later Or Optional
 
@@ -26,8 +25,9 @@ This backlog tracks the next practical follow-up after the merged Supabase v1 pe
 - Preserve `app.tab` as local-only state unless a future issue changes that intentionally.
 - Keep localStorage fallback until removal is planned and validated explicitly.
 - Revisit same-day local-over-remote conflict behavior before broader rollout.
-- The next primary lane is replacing the temporary single-owner `solo` model with user-scoped persistence.
-- SMTP/custom email provider work and auth hardening remain intentionally deferred follow-up work.
+- Authenticated-user cloud ownership is now the live persistence model.
+- Legacy cloud rows that still exist under `owner_key = 'solo'` require a separate manual admin backfill if they need to move.
+- SMTP/custom email provider work and auth hardening remain the next intentionally deferred follow-up work.
 
 ## Issue Template Standard
 

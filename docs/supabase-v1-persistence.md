@@ -11,6 +11,7 @@ Canonical reference for the shipped Supabase-backed persistence path now live in
 - Session restore and sign-out are live.
 - Cloud persistence now flows through the Vercel serverless endpoint at `/api/persistence`.
 - `/api/persistence` now requires a valid Supabase bearer token.
+- `/api/persistence` scopes reads and writes to the authenticated Supabase user id from that bearer token.
 - Supabase v1 schema and tables are in place for push-up and workout persistence.
 - Writes were changed from broad owner-level replacement toward day-scoped persistence behavior at the API boundary.
 
@@ -76,10 +77,11 @@ Current runtime behavior:
 - `app.tab` remains local-only in `localStorage`.
 - Push-up daily goal settings still remain local-only.
 - localStorage fallback remains enabled during rollout.
+- Browser-local fallback for push-up and workout data is now scoped per authenticated user.
 - Authenticated screens now show a compact sync indicator for cloud load, save, save success, and cloud-sync failures.
 - Auth v0 is live and closes public UI access.
-- Ownership is still hard-coded to `owner_key = 'solo'`.
-- Auth protects the persistence API, but persisted data is not yet partitioned per authenticated user.
+- The live ownership key is the authenticated Supabase user id (`auth.users.id`) extracted from the verified bearer token.
+- Legacy rows that still exist under `owner_key = 'solo'` are not auto-backfilled by the app. Use the manual admin backfill path if that historical data still matters.
 - Same-day local-over-remote conflict behavior still exists on initial merge.
 
 ## Local Dev and Deployment
@@ -99,7 +101,6 @@ Current runtime behavior:
 
 ## Follow-Up That Still Remains
 
-- Replace the current hard-coded solo owner model with user-scoped persistence tied to the authenticated user.
 - Add SMTP/custom email provider setup and auth rate-limit hardening when moving beyond the current minimal auth gate.
 - Decide whether and when to remove localStorage fallback.
 - Revisit same-day local-over-remote conflict behavior.

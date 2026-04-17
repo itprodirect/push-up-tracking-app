@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { todayKey } from './dates';
+import { saveEntries } from './storage';
 
 const { loadPersistenceSnapshot, savePushupEntries, saveWorkoutDays } = vi.hoisted(() => ({
   loadPersistenceSnapshot: vi.fn(),
@@ -39,14 +40,13 @@ function deferred<T>() {
 
 describe('App tab shell', () => {
   it('defaults to the Push-Ups tab', () => {
-    render(<App />);
-    // Heading for the push-ups screen should be visible
+    render(<App userId="user-a" />);
     expect(screen.getByRole('heading', { name: /push-ups/i })).toBeInTheDocument();
   });
 
   it('switches to Workouts tab when the Workouts tab button is clicked', async () => {
     const user = userEvent.setup();
-    render(<App />);
+    render(<App userId="user-a" />);
     const workoutsTab = screen.getByRole('tab', { name: /workouts/i });
     await user.click(workoutsTab);
     expect(screen.getByRole('heading', { name: /workouts/i })).toBeInTheDocument();
@@ -54,11 +54,10 @@ describe('App tab shell', () => {
 
   it('remembers selected tab across re-renders via localStorage', async () => {
     const user = userEvent.setup();
-    const { unmount } = render(<App />);
+    const { unmount } = render(<App userId="user-a" />);
     await user.click(screen.getByRole('tab', { name: /workouts/i }));
     unmount();
-    render(<App />);
-    // Should still be on Workouts
+    render(<App userId="user-a" />);
     expect(screen.getByRole('heading', { name: /workouts/i })).toBeInTheDocument();
   });
 
@@ -66,7 +65,7 @@ describe('App tab shell', () => {
     const load = deferred<any>();
     loadPersistenceSnapshot.mockReturnValue(load.promise);
 
-    render(<App />);
+    render(<App userId="user-a" />);
 
     expect(screen.getByRole('status')).toHaveTextContent(/loading cloud data/i);
   });
@@ -83,7 +82,7 @@ describe('App tab shell', () => {
       },
     });
 
-    render(<App />);
+    render(<App userId="user-a" />);
 
     expect(await screen.findByText(/cloud data loaded/i)).toBeInTheDocument();
     expect(screen.getByText(/10 \/ 50/)).toBeInTheDocument();
@@ -101,7 +100,7 @@ describe('App tab shell', () => {
     });
     savePushupEntries.mockReturnValue(save.promise);
 
-    render(<App />);
+    render(<App userId="user-a" />);
 
     await waitFor(() => {
       expect(loadPersistenceSnapshot).toHaveBeenCalled();
@@ -127,7 +126,7 @@ describe('App tab shell', () => {
     });
     savePushupEntries.mockResolvedValue({ kind: 'error' });
 
-    render(<App />);
+    render(<App userId="user-a" />);
 
     await waitFor(() => {
       expect(loadPersistenceSnapshot).toHaveBeenCalled();
@@ -141,8 +140,38 @@ describe('App tab shell', () => {
   it('distinguishes session expiry from a generic cloud failure', async () => {
     loadPersistenceSnapshot.mockResolvedValue({ kind: 'auth_error' });
 
-    render(<App />);
+    render(<App userId="user-a" />);
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/sign in again to resume cloud sync/i);
+  });
+
+  it('does not leak one user local fallback data into the next signed-in user session', async () => {
+    const day = todayKey();
+    loadPersistenceSnapshot.mockResolvedValue({
+      kind: 'success',
+      snapshot: {
+        entries: {},
+        workouts: {},
+      },
+    });
+    saveEntries(
+      {
+        [day]: { date: day, sets: [10] },
+      },
+      'user-a',
+    );
+
+    const { rerender } = render(<App key="user-a" userId="user-a" />);
+
+    expect(screen.getByText(/10 \/ 50/)).toBeInTheDocument();
+
+    rerender(<App key="user-b" userId="user-b" />);
+
+    await waitFor(() => {
+      expect(loadPersistenceSnapshot).toHaveBeenCalledTimes(2);
+    });
+
+    expect(screen.getByText(/0 \/ 50/)).toBeInTheDocument();
+    expect(screen.queryByText(/10 \/ 50/)).not.toBeInTheDocument();
   });
 });

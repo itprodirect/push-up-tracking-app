@@ -89,7 +89,8 @@ Set these in Vercel for both Preview and Production:
 - Authenticated screens now show a compact sync status for cloud load, save progress, save success, and sync failures.
 - Supabase v1 schema and tables are in place for push-up and workout persistence.
 - `app.tab` remains local-only, and localStorage fallback remains enabled during rollout.
-- Persistence is still temporarily single-owner via `owner_key = 'solo'`; data is not yet partitioned per authenticated user.
+- Cloud persistence is now scoped to the authenticated Supabase user id at `/api/persistence`.
+- Browser local fallback for push-up and workout data is also scoped per authenticated user to avoid cross-user leakage on a shared device.
 - SMTP/custom email provider setup and auth rate-limit hardening are intentionally deferred.
 
 See [docs/01-current-state.md](./docs/01-current-state.md) and [docs/supabase-v1-persistence.md](./docs/supabase-v1-persistence.md) for details.
@@ -98,9 +99,9 @@ See [docs/01-current-state.md](./docs/01-current-state.md) and [docs/supabase-v1
 
 What is intentionally not done yet:
 
-- User-scoped persistence is not live yet; persisted rows still use temporary `owner_key = 'solo'`.
 - `localStorage` fallback remains enabled during rollout.
 - `app.tab` and push-up goal settings remain local-only.
+- Legacy cloud rows previously stored under `owner_key = 'solo'` are not auto-backfilled by the app. Use the manual admin backfill runbook if that data still needs to move to a real user id.
 - SMTP/custom email provider setup and auth hardening are deferred.
 
 Most likely setup mistakes:

@@ -15,10 +15,11 @@ export type Settings = {
 
 const ENTRIES_KEY = 'pushup.entries.v1';
 const SETTINGS_KEY = 'pushup.settings.v1';
+const ENTRIES_SCOPE_MIGRATION_KEY = 'pushup.entries.scope-migration.v1';
 
-export function loadEntries(): Record<string, DayEntry> {
+export function loadEntries(ownerScope?: string): Record<string, DayEntry> {
   try {
-    const raw = localStorage.getItem(ENTRIES_KEY);
+    const raw = loadScopedValue(ENTRIES_KEY, ENTRIES_SCOPE_MIGRATION_KEY, ownerScope);
     if (!raw) return {};
     const parsed = JSON.parse(raw);
     if (!isRecord(parsed)) return {};
@@ -37,8 +38,8 @@ export function loadEntries(): Record<string, DayEntry> {
   }
 }
 
-export function saveEntries(entries: Record<string, DayEntry>): void {
-  localStorage.setItem(ENTRIES_KEY, JSON.stringify(entries));
+export function saveEntries(entries: Record<string, DayEntry>, ownerScope?: string): void {
+  localStorage.setItem(storageKey(ENTRIES_KEY, ownerScope), JSON.stringify(entries));
 }
 
 export function loadSettings(): Settings {
@@ -94,10 +95,11 @@ export type WorkoutDay = {
 };
 
 const WORKOUTS_KEY = 'workouts.entries.v1';
+const WORKOUTS_SCOPE_MIGRATION_KEY = 'workouts.entries.scope-migration.v1';
 
-export function loadWorkouts(): Record<string, WorkoutDay> {
+export function loadWorkouts(ownerScope?: string): Record<string, WorkoutDay> {
   try {
-    const raw = localStorage.getItem(WORKOUTS_KEY);
+    const raw = loadScopedValue(WORKOUTS_KEY, WORKOUTS_SCOPE_MIGRATION_KEY, ownerScope);
     if (!raw) return {};
     const parsed = JSON.parse(raw);
     if (!isRecord(parsed)) return {};
@@ -116,8 +118,8 @@ export function loadWorkouts(): Record<string, WorkoutDay> {
   }
 }
 
-export function saveWorkouts(w: Record<string, WorkoutDay>): void {
-  localStorage.setItem(WORKOUTS_KEY, JSON.stringify(w));
+export function saveWorkouts(w: Record<string, WorkoutDay>, ownerScope?: string): void {
+  localStorage.setItem(storageKey(WORKOUTS_KEY, ownerScope), JSON.stringify(w));
 }
 
 export function exerciseVolume(ex: WorkoutExercise): number {
@@ -192,4 +194,27 @@ function normalizeCategory(value: unknown): WorkoutExercise['category'] {
 
 function isRecord(value: unknown): value is Record<string, any> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function loadScopedValue(baseKey: string, migrationKey: string, ownerScope?: string): string | null {
+  if (!ownerScope) return localStorage.getItem(baseKey);
+
+  const scopedKey = storageKey(baseKey, ownerScope);
+  const scopedValue = localStorage.getItem(scopedKey);
+  if (scopedValue) return scopedValue;
+
+  const legacyValue = localStorage.getItem(baseKey);
+  if (!legacyValue) return null;
+
+  const claimedScope = localStorage.getItem(migrationKey);
+  if (claimedScope && claimedScope !== ownerScope) return null;
+
+  localStorage.setItem(scopedKey, legacyValue);
+  localStorage.setItem(migrationKey, ownerScope);
+  return legacyValue;
+}
+
+function storageKey(baseKey: string, ownerScope?: string): string {
+  if (!ownerScope) return baseKey;
+  return `${baseKey}:user:${encodeURIComponent(ownerScope)}`;
 }
