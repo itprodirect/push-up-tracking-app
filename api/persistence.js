@@ -1,6 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
 
-const OWNER_KEY = 'solo';
 const PUSHUP_ENTRIES_KEY = 'entries';
 let authVerificationClient;
 
@@ -17,14 +16,14 @@ export default async function handler(req, res) {
       return;
     }
 
-    const isAuthorized = await verifyBearerToken(jwt);
-    if (!isAuthorized) {
+    const userId = await verifyBearerToken(jwt);
+    if (!userId) {
       res.status(401).json({ error: 'Invalid or expired bearer token.' });
       return;
     }
 
     if (req.method === 'GET') {
-      const [entries, workouts] = await Promise.all([loadPushupEntries(), loadWorkouts()]);
+      const [entries, workouts] = await Promise.all([loadPushupEntries(userId), loadWorkouts(userId)]);
       res.status(200).json({ entries, workouts });
       return;
     }
@@ -34,13 +33,13 @@ export default async function handler(req, res) {
       const day = normalizeDay(body?.day);
 
       if (body?.kind === 'pushups' && day) {
-        await savePushupEntry(day, normalizeEntry(body.entry, day));
+        await savePushupEntry(userId, day, normalizeEntry(body.entry, day));
         res.status(200).json({ ok: true });
         return;
       }
 
       if (body?.kind === 'workouts' && day) {
-        await saveWorkoutDay(day, normalizeWorkout(body.workout, day));
+        await saveWorkoutDay(userId, day, normalizeWorkout(body.workout, day));
         res.status(200).json({ ok: true });
         return;
       }
@@ -70,9 +69,14 @@ function getBearerToken(req) {
 }
 
 async function verifyBearerToken(jwt) {
-  const client = getAuthVerificationClient();
-  const { data, error } = await client.auth.getUser(jwt);
-  return !error && !!data?.user;
+  try {
+    const client = getAuthVerificationClient();
+    const { data, error } = await client.auth.getUser(jwt);
+    if (error || !data?.user?.id) return null;
+    return data.user.id;
+  } catch {
+    return null;
+  }
 }
 
 function getAuthVerificationClient() {
@@ -100,10 +104,10 @@ function parseBody(req) {
   return req.body ?? null;
 }
 
-async function loadPushupEntries() {
+async function loadPushupEntries(userId) {
   const [settingsRows, pushupRows] = await Promise.all([
-    supabaseRequest('user_settings?owner_key=eq.solo&select=pushup_settings'),
-    supabaseRequest('pushup_days?owner_key=eq.solo&select=day,reps&order=day.asc'),
+    supabaseRequest(`user_settings?${ownerKeyFilter(userId)}&select=pushup_settings`),
+    supabaseRequest(`pushup_days?${ownerKeyFilter(userId)}&select=day,reps&order=day.asc`),
   ]);
 
   const settings = Array.isArray(settingsRows) ? settingsRows[0]?.pushup_settings : undefined;
@@ -122,8 +126,8 @@ async function loadPushupEntries() {
   return fallbackEntries;
 }
 
-async function loadWorkouts() {
-  const dayRows = await supabaseRequest('workout_days?owner_key=eq.solo&select=id,day&order=day.asc');
+async function loadWorkouts(userId) {
+  const dayRows = await supabaseRequest(`workout_days?${ownerKeyFilter(userId)}&select=id,day&order=day.asc`);
   if (!Array.isArray(dayRows) || dayRows.length === 0) return {};
 
   const dayIds = dayRows
@@ -181,8 +185,8 @@ async function loadWorkouts() {
   return workouts;
 }
 
-async function savePushupEntry(day, entry) {
-  const settingsRows = await supabaseRequest('user_settings?owner_key=eq.solo&select=pushup_settings');
+async function savePushupEntry(userId, day, entry) {
+  const settingsRows = await supabaseRequest(`user_settings?${ownerKeyFilter(userId)}&select=pushup_settings`);
   const existingSettings = Array.isArray(settingsRows) ? settingsRows[0]?.pushup_settings : null;
   const pushupSettings = isRecord(existingSettings) ? { ...existingSettings } : {};
   const entries = normalizeEntries(pushupSettings[PUSHUP_ENTRIES_KEY]);
@@ -200,13 +204,13 @@ async function savePushupEntry(day, entry) {
     },
     body: JSON.stringify([
       {
-        owner_key: OWNER_KEY,
+        owner_key: userId,
         pushup_settings: { ...pushupSettings, [PUSHUP_ENTRIES_KEY]: entries },
       },
     ]),
   });
 
-  await supabaseRequest(`pushup_days?owner_key=eq.solo&day=eq.${encodeURIComponent(day)}`, { method: 'DELETE' });
+  await supabaseRequest(`pushup_days?${ownerKeyFilter(userId)}&day=eq.${encodeURIComponent(day)}`, { method: 'DELETE' });
 
   if (entry && entry.sets.length > 0) {
     await supabaseRequest('pushup_days', {
@@ -214,7 +218,7 @@ async function savePushupEntry(day, entry) {
       headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
       body: JSON.stringify([
         {
-          owner_key: OWNER_KEY,
+          owner_key: userId,
           day,
           reps: entry.sets.reduce((sum, reps) => sum + reps, 0),
         },
@@ -223,8 +227,8 @@ async function savePushupEntry(day, entry) {
   }
 }
 
-async function saveWorkoutDay(day, workout) {
-  await supabaseRequest(`workout_days?owner_key=eq.solo&day=eq.${encodeURIComponent(day)}`, { method: 'DELETE' });
+async function saveWorkoutDay(userId, day, workout) {
+  await supabaseRequest(`workout_days?${ownerKeyFilter(userId)}&day=eq.${encodeURIComponent(day)}`, { method: 'DELETE' });
 
   if (!workout) return;
 
@@ -233,7 +237,7 @@ async function saveWorkoutDay(day, workout) {
     headers: { Prefer: 'return=representation' },
     body: JSON.stringify([
       {
-        owner_key: OWNER_KEY,
+        owner_key: userId,
         day,
       },
     ]),
@@ -313,6 +317,10 @@ function normalizeEntries(value) {
     };
   }
   return entries;
+}
+
+function ownerKeyFilter(userId) {
+  return `owner_key=eq.${encodeURIComponent(userId)}`;
 }
 
 function normalizeWorkouts(value) {
