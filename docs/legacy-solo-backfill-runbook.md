@@ -27,9 +27,18 @@ Issue #39 was opened after a manual audit found this legacy `solo` footprint:
 
 Treat those numbers as an operator expectation check, not a hard-coded script invariant. If the dry-run output differs materially, stop and re-audit before any apply step.
 
+## Current Production Target
+
+For the current production issue #39 lane, the verified target account is:
+
+- email: `nick@itprodirect.com`
+- `auth.users.id`: `4666c980-df61-4285-8007-0c065ab32e70`
+
+For production use of this runbook, stop and re-verify with a fresh read-only `auth.users` query if that target changes.
+
 ## Scope
 
-Owner-scoped tables that require direct reassignment:
+Owner-scoped parent tables affected by the backfill:
 
 - `public.user_settings`
 - `public.pushup_days`
@@ -46,6 +55,11 @@ Why descendants are validation-only:
 - `workout_sets` does not store `owner_key`; it follows `workout_exercise_id`
 - Reassigning `public.workout_days.owner_key` preserves the descendant tree because the day ids stay the same
 
+`user_settings` is handled differently from the day tables:
+
+- `pushup_days` and `workout_days` still use direct `owner_key` reassignment
+- `user_settings` now uses a conservative merge into the existing target row, followed by removal of the `solo` row
+
 ## Repo Assets
 
 - Dry-run SQL: [`supabase/admin/backfill_legacy_solo_to_user_dry_run.sql`](/C:/Users/user/push-up-tracking-app/supabase/admin/backfill_legacy_solo_to_user_dry_run.sql)
@@ -57,7 +71,7 @@ Why descendants are validation-only:
 - The target user id must be supplied explicitly.
 - Do not infer the target user id from email text pasted into SQL.
 - Do not run the apply script if the dry-run shows conflicts or a missing target user.
-- Do not run both scripts in the same tab by accident; the dry-run is read-only, the apply script starts a transaction.
+- Do not run both scripts in the same tab by accident; the dry-run uses session-local temp objects only, while the apply script starts a transaction and mutates permanent app tables.
 
 ## Prerequisites
 
@@ -95,7 +109,7 @@ psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/admin/backfill_legacy_sol
 
 ## What The Dry-Run Shows
 
-The dry-run is read-only and reports:
+The dry-run uses session-local temp objects and reports:
 
 - the explicit target user id and matching `auth.users` row
 - source and target counts for:
@@ -107,7 +121,10 @@ The dry-run is read-only and reports:
 - the exact `solo` rows that would be reassigned in owner-scoped tables
 - push-up day conflicts already present for the target owner
 - workout day conflicts already present for the target owner
-- whether a target `user_settings` row already exists
+- `user_settings` structure checks for source and target rows
+- unexpected top-level `pushup_settings` keys outside `entries`
+- source and target `pushup_settings.entries` day keys
+- explicit `user_settings` entry-date overlap detection
 - descendant counts reachable from the `solo` workout days
 - projected post-apply owner-scoped counts and a final `apply_ready` signal
 
@@ -117,14 +134,44 @@ Before any apply step, confirm all of the following:
 
 1. The target user id and email are the intended account.
 2. The source counts match expectations closely enough to explain any drift from the issue #39 audit.
-3. `apply_ready` is `true`.
-4. `blocking_issue_count` is `0`.
-5. There is no existing target `user_settings` row if a `solo` `user_settings` row still exists.
-6. There are no conflicting `pushup_days.day` values already owned by the target user.
-7. There are no conflicting `workout_days.day` values already owned by the target user.
-8. The listed rows to be reassigned match the intended historical date range.
+3. `source_user_settings_count` is `1`.
+4. `target_user_settings_count` is `1`.
+5. `pushup_day_conflict_count` is `0`.
+6. `workout_day_conflict_count` is `0`.
+7. `user_settings_invalid_shape_count` is `0`.
+8. `user_settings_unexpected_top_level_key_count` is `0`.
+9. `user_settings_entry_overlap_count` is `0`.
+10. `apply_ready` is `true`.
+11. `blocking_issue_count` is `0`.
+12. The listed rows to be reassigned match the intended historical date range.
 
 If any of those checks fail, stop. Review the conflicting rows manually rather than forcing a write.
+
+## `user_settings` Merge Rule
+
+The `user_settings` path is intentionally conservative.
+
+Preconditions:
+
+- for the current production lane, the verified target user id must be `4666c980-df61-4285-8007-0c065ab32e70`
+- `pushup_day_conflict_count` must be `0`
+- `workout_day_conflict_count` must be `0`
+- `source_user_settings_count` must be `1`
+- `target_user_settings_count` must be `1`
+- source and target `pushup_settings` must be `null` or JSON objects
+- source and target `pushup_settings.entries` must be missing, `null`, or JSON objects
+- no unexpected top-level `pushup_settings` keys may exist outside `entries`
+- source and target `entries` day keys must be disjoint
+- any overlapping `entries` day key aborts the apply path
+
+Merge behavior:
+
+- preserve the existing target `user_settings` row
+- preserve existing target `entries`
+- merge in the `solo` `entries`
+- final target `pushup_settings` contains the union of source and target entry-date keys under `entries`
+- do not auto-resolve overlap; abort instead
+- after a successful apply there must be exactly one target `user_settings` row and no remaining `solo` `user_settings` row
 
 ## Manual Apply Flow
 
@@ -146,15 +193,18 @@ psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/admin/backfill_legacy_sol
 The apply script is manual/admin-only and includes guardrails:
 
 - starts a transaction with `begin`
-- validates that `__TARGET_USER_ID__` was replaced
-- validates that the supplied target id is a real `auth.users.id`
-- fails if the target user already has a conflicting `user_settings` row
+- validates that the supplied target id is a non-empty, non-`solo`, valid `auth.users.id`
+- requires exactly one `solo` `user_settings` row and exactly one target `user_settings` row
+- fails if `user_settings` shape is not limited to the understood `entries` object
+- fails if any top-level `pushup_settings` key exists outside `entries`
+- fails if any `user_settings.entries` day key overlaps between source and target
+- merges `solo` `user_settings.entries` into the existing target `user_settings` row
+- deletes the `solo` `user_settings` row only after the merge update succeeds
 - fails if `pushup_days` contains any day collisions for the target user
 - fails if `workout_days` contains any day collisions for the target user
-- updates only:
-  - `public.user_settings.owner_key`
-  - `public.pushup_days.owner_key`
-  - `public.workout_days.owner_key`
+- directly reassigns `owner_key` only on:
+  - `public.pushup_days`
+  - `public.workout_days`
 - does not update `workout_exercises` or `workout_sets`
 - validates that descendant exercise/set counts still match the moved workout day ids
 
@@ -166,6 +216,8 @@ Expected outcomes:
 
 - no remaining `owner_key = 'solo'` rows in `user_settings`, `pushup_days`, or `workout_days`
 - the target owner now holds the moved parent rows
+- the target `user_settings` row contains the union of source and target `entries` day keys
+- there is exactly one target `user_settings` row
 - descendant `workout_exercises` and `workout_sets` counts reachable from the moved workout days are unchanged
 - the moved workout day ids are still the same ids that own the descendant rows
 
