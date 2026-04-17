@@ -1,280 +1,198 @@
 # Legacy `solo` Backfill Runbook
 
-This runbook prepares a one-time admin backfill from legacy cloud data stored under `owner_key = 'solo'` into a real authenticated Supabase user id after PR1 user-scoped persistence.
+This runbook prepares a one-time, admin-reviewed backfill for historical cloud rows that still use `owner_key = 'solo'`.
 
-This document is preparation only. It does not authorize execution.
+This is an operations document only. It does not authorize execution, and nothing in this repo runs the backfill automatically.
+
+## Goal
+
+Reassign legacy `solo` ownership to one explicit authenticated Supabase user id after the app's move to bearer-token verified, user-scoped persistence.
+
+Current live behavior:
+
+- `/api/persistence` verifies the Supabase bearer token.
+- `/api/persistence` reads and writes `owner_key` as the authenticated `auth.users.id`.
+- The app does not auto-backfill older `solo` rows.
+
+## Current Expected Legacy Scope
+
+Issue #39 was opened after a manual audit found this legacy `solo` footprint:
+
+- `user_settings`: 1 row
+- `pushup_days`: 3 rows
+- `workout_days`: 3 rows
+- descendant `workout_exercises`: 7 rows
+- descendant `workout_sets`: 22 rows
+- workout day range: `2026-03-31` through `2026-04-16`
+
+Treat those numbers as an operator expectation check, not a hard-coded script invariant. If the dry-run output differs materially, stop and re-audit before any apply step.
 
 ## Scope
 
-Backfill only the persistence tables currently used by [`api/persistence.js`](/C:/Users/user/push-up-tracking-app/api/persistence.js):
+Owner-scoped tables that require direct reassignment:
 
 - `public.user_settings`
 - `public.pushup_days`
 - `public.workout_days`
+
+Descendant tables that do not require direct ownership mutation:
+
 - `public.workout_exercises`
 - `public.workout_sets`
 
-Current shipped write behavior:
-
-- Push-up saves are day-scoped and write both `user_settings.pushup_settings.entries` and `pushup_days`.
-- Workout saves replace one full workout day at a time for the authenticated owner and rebuild that day's exercise/set tree.
-- Ownership is now derived from the validated Supabase bearer token on the server.
-
-## What Needs Backfill
-
-Legacy data to consider:
-
-- The `public.user_settings` row where `owner_key = 'solo'`
-- All `public.pushup_days` rows where `owner_key = 'solo'`
-- All `public.workout_days` rows where `owner_key = 'solo'`
-- All descendant `public.workout_exercises` and `public.workout_sets` rows reachable from those solo workout days
-
-Data that does **not** need a separate ownership rewrite:
+Why descendants are validation-only:
 
 - `workout_exercises` does not store `owner_key`; it follows `workout_day_id`
 - `workout_sets` does not store `owner_key`; it follows `workout_exercise_id`
+- Reassigning `public.workout_days.owner_key` preserves the descendant tree because the day ids stay the same
 
-## Backfill Rules
+## Repo Assets
 
-The one-time backfill should be idempotent and conservative.
+- Dry-run SQL: [`supabase/admin/backfill_legacy_solo_to_user_dry_run.sql`](/C:/Users/user/push-up-tracking-app/supabase/admin/backfill_legacy_solo_to_user_dry_run.sql)
+- Manual apply SQL: [`supabase/admin/backfill_legacy_solo_to_user.sql`](/C:/Users/user/push-up-tracking-app/supabase/admin/backfill_legacy_solo_to_user.sql)
 
-- The source owner is always `solo`.
-- The target owner is a validated authenticated user id supplied manually at execution time.
-- Existing target-owned data wins over legacy `solo` data.
-- The backfill only fills target gaps; it must not overwrite newer target-owned rows.
+## Safety Rules
 
-Collision policy:
+- No production mutation should happen until the dry-run output is reviewed by a human.
+- The target user id must be supplied explicitly.
+- Do not infer the target user id from email text pasted into SQL.
+- Do not run the apply script if the dry-run shows conflicts or a missing target user.
+- Do not run both scripts in the same tab by accident; the dry-run is read-only, the apply script starts a transaction.
 
-- `pushup_days`: copy only solo days that do not already exist for the target owner.
-- `workout_days`: treat each workout day as atomic. If the target owner already has a row for the same `day`, skip that entire workout day and its descendants.
-- `user_settings.pushup_settings`: merge JSON with target precedence.
+## Prerequisites
 
-`pushup_settings` merge policy:
+1. User-scoped persistence is already deployed and smoke checked.
+2. The operator has admin/service-role access to query `auth.users` and the persistence tables.
+3. A quiet window is chosen so the target user is not actively writing data during review and apply.
+4. A manual export or snapshot of the relevant `solo` rows and any target-owned rows is taken before the apply step.
+5. The operator knows which authenticated Supabase account should receive the legacy data.
 
-- Top-level keys outside `entries`: copy solo-only keys, but keep target values on conflicts.
-- Nested `entries` object: merge by day key, with target entry values winning on conflicts.
-- Do not delete target keys during backfill.
+## Confirm The Correct Target User Id
 
-## Preconditions
+Look up the target user in `auth.users` first. Do not guess the uuid.
 
-Run later only after these checks pass:
-
-1. PR1 user-scoped persistence is deployed and has passed smoke testing and manual validation.
-2. The target authenticated user id is confirmed from Supabase Auth, not guessed.
-3. The operator has service-role level access to query and write the persistence tables.
-4. A quiet window is chosen so the target user is not actively writing data during the backfill.
-5. A manual export or snapshot of the current `solo` rowset and target rowset is taken before execution.
-
-## Pre-Check Queries
-
-Replace `__TARGET_USER_ID__` before running any query.
-
-### Validate the target user exists
+Example lookup:
 
 ```sql
 select id, email, created_at
 from auth.users
-where id = '__TARGET_USER_ID__'::uuid;
+where email = 'target@example.com';
 ```
 
-### Count current source and target rows
+The dry-run and apply scripts both fail if the supplied target id is not a valid `auth.users.id`.
 
-```sql
-select 'user_settings' as table_name, owner_key, count(*) as row_count
-from public.user_settings
-where owner_key in ('solo', '__TARGET_USER_ID__')
-group by table_name, owner_key
+## Dry-Run First
 
-union all
+1. Open [`supabase/admin/backfill_legacy_solo_to_user_dry_run.sql`](/C:/Users/user/push-up-tracking-app/supabase/admin/backfill_legacy_solo_to_user_dry_run.sql).
+2. Replace `__TARGET_USER_ID__` with the confirmed `auth.users.id`.
+3. Run the script in Supabase SQL Editor or another manual SQL session.
 
-select 'pushup_days' as table_name, owner_key, count(*) as row_count
-from public.pushup_days
-where owner_key in ('solo', '__TARGET_USER_ID__')
-group by table_name, owner_key
+Example `psql` usage after replacing the placeholder in the file:
 
-union all
-
-select 'workout_days' as table_name, owner_key, count(*) as row_count
-from public.workout_days
-where owner_key in ('solo', '__TARGET_USER_ID__')
-group by table_name, owner_key
-order by table_name, owner_key;
+```bash
+psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/admin/backfill_legacy_solo_to_user_dry_run.sql
 ```
 
-### Inspect push-up day collisions
+## What The Dry-Run Shows
 
-```sql
-select s.day
-from public.pushup_days s
-join public.pushup_days t
-  on t.owner_key = '__TARGET_USER_ID__'
- and t.day = s.day
-where s.owner_key = 'solo'
-order by s.day;
+The dry-run is read-only and reports:
+
+- the explicit target user id and matching `auth.users` row
+- source and target counts for:
+  - `user_settings`
+  - `pushup_days`
+  - `workout_days`
+  - descendant `workout_exercises`
+  - descendant `workout_sets`
+- the exact `solo` rows that would be reassigned in owner-scoped tables
+- push-up day conflicts already present for the target owner
+- workout day conflicts already present for the target owner
+- whether a target `user_settings` row already exists
+- descendant counts reachable from the `solo` workout days
+- projected post-apply owner-scoped counts and a final `apply_ready` signal
+
+## Dry-Run Validation Checklist
+
+Before any apply step, confirm all of the following:
+
+1. The target user id and email are the intended account.
+2. The source counts match expectations closely enough to explain any drift from the issue #39 audit.
+3. `apply_ready` is `true`.
+4. `blocking_issue_count` is `0`.
+5. There is no existing target `user_settings` row if a `solo` `user_settings` row still exists.
+6. There are no conflicting `pushup_days.day` values already owned by the target user.
+7. There are no conflicting `workout_days.day` values already owned by the target user.
+8. The listed rows to be reassigned match the intended historical date range.
+
+If any of those checks fail, stop. Review the conflicting rows manually rather than forcing a write.
+
+## Manual Apply Flow
+
+Only run this after the dry-run is clean and the operator has fresh exports or snapshots.
+
+1. Open [`supabase/admin/backfill_legacy_solo_to_user.sql`](/C:/Users/user/push-up-tracking-app/supabase/admin/backfill_legacy_solo_to_user.sql).
+2. Replace `__TARGET_USER_ID__` with the same confirmed `auth.users.id` used in the dry-run.
+3. Run the script manually in a SQL session with write access.
+4. Review the summary output and post-check queries before deciding whether to commit.
+
+Example `psql` usage after replacing the placeholder in the file:
+
+```bash
+psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/admin/backfill_legacy_solo_to_user.sql
 ```
 
-### Inspect workout day collisions
+## Apply Script Behavior
 
-```sql
-select s.day
-from public.workout_days s
-join public.workout_days t
-  on t.owner_key = '__TARGET_USER_ID__'
- and t.day = s.day
-where s.owner_key = 'solo'
-order by s.day;
-```
+The apply script is manual/admin-only and includes guardrails:
 
-### Inspect `pushup_settings.entries` day collisions
+- starts a transaction with `begin`
+- validates that `__TARGET_USER_ID__` was replaced
+- validates that the supplied target id is a real `auth.users.id`
+- fails if the target user already has a conflicting `user_settings` row
+- fails if `pushup_days` contains any day collisions for the target user
+- fails if `workout_days` contains any day collisions for the target user
+- updates only:
+  - `public.user_settings.owner_key`
+  - `public.pushup_days.owner_key`
+  - `public.workout_days.owner_key`
+- does not update `workout_exercises` or `workout_sets`
+- validates that descendant exercise/set counts still match the moved workout day ids
 
-```sql
-with solo_entry_days as (
-  select jsonb_object_keys(
-    case
-      when jsonb_typeof(pushup_settings -> 'entries') = 'object' then pushup_settings -> 'entries'
-      else '{}'::jsonb
-    end
-  ) as day
-  from public.user_settings
-  where owner_key = 'solo'
-),
-target_entry_days as (
-  select jsonb_object_keys(
-    case
-      when jsonb_typeof(pushup_settings -> 'entries') = 'object' then pushup_settings -> 'entries'
-      else '{}'::jsonb
-    end
-  ) as day
-  from public.user_settings
-  where owner_key = '__TARGET_USER_ID__'
-)
-select s.day
-from solo_entry_days s
-join target_entry_days t using (day)
-order by s.day;
-```
+## Post-Apply Verification
 
-### Review top-level `pushup_settings` key overlap outside `entries`
+Run the post-check queries printed by the apply script before committing.
 
-```sql
-with solo_keys as (
-  select jsonb_object_keys(coalesce(pushup_settings, '{}'::jsonb) - 'entries') as key
-  from public.user_settings
-  where owner_key = 'solo'
-),
-target_keys as (
-  select jsonb_object_keys(coalesce(pushup_settings, '{}'::jsonb) - 'entries') as key
-  from public.user_settings
-  where owner_key = '__TARGET_USER_ID__'
-)
-select s.key
-from solo_keys s
-join target_keys t using (key)
-order by s.key;
-```
+Expected outcomes:
 
-## Execution
+- no remaining `owner_key = 'solo'` rows in `user_settings`, `pushup_days`, or `workout_days`
+- the target owner now holds the moved parent rows
+- descendant `workout_exercises` and `workout_sets` counts reachable from the moved workout days are unchanged
+- the moved workout day ids are still the same ids that own the descendant rows
 
-Planned execution artifact:
+If anything looks wrong, use `rollback;` in the same session instead of committing.
 
-- [`supabase/admin/backfill_legacy_solo_to_user.sql`](/C:/Users/user/push-up-tracking-app/supabase/admin/backfill_legacy_solo_to_user.sql)
+## Rollback Guidance
 
-Execution guidance:
+The safest rollback path is still transaction-first:
 
-1. Open a SQL session with write access.
-2. Replace `__TARGET_USER_ID__` in the script with the real authenticated user id.
-3. Review the pre-check queries and take manual exports before making any writes.
-4. Run the script inside a single transaction.
-5. Review the script's summary output before deciding whether to `COMMIT` or `ROLLBACK`.
-
-## Post-Check Queries
-
-These queries confirm the expected state after a successful backfill.
-
-### Confirm target ownership now contains the expected rows
-
-```sql
-select 'user_settings' as table_name, owner_key, count(*) as row_count
-from public.user_settings
-where owner_key = '__TARGET_USER_ID__'
-group by table_name, owner_key
-
-union all
-
-select 'pushup_days' as table_name, owner_key, count(*) as row_count
-from public.pushup_days
-where owner_key = '__TARGET_USER_ID__'
-group by table_name, owner_key
-
-union all
-
-select 'workout_days' as table_name, owner_key, count(*) as row_count
-from public.workout_days
-where owner_key = '__TARGET_USER_ID__'
-group by table_name, owner_key;
-```
-
-### Confirm copied workout descendants exist for target-owned workout days
-
-```sql
-select
-  count(distinct wd.id) as workout_day_count,
-  count(distinct we.id) as workout_exercise_count,
-  count(distinct ws.id) as workout_set_count
-from public.workout_days wd
-left join public.workout_exercises we
-  on we.workout_day_id = wd.id
-left join public.workout_sets ws
-  on ws.workout_exercise_id = we.id
-where wd.owner_key = '__TARGET_USER_ID__';
-```
-
-### Confirm collision days still belong to the target owner unchanged at the ownership level
-
-```sql
-select day
-from public.pushup_days
-where owner_key = '__TARGET_USER_ID__'
-intersect
-select day
-from public.pushup_days
-where owner_key = 'solo'
-order by day;
-```
-
-```sql
-select day
-from public.workout_days
-where owner_key = '__TARGET_USER_ID__'
-intersect
-select day
-from public.workout_days
-where owner_key = 'solo'
-order by day;
-```
-
-The intersecting days above are expected if legacy `solo` data is intentionally left untouched after the copy.
-
-## Rollback
-
-Recommended rollback strategy:
-
-1. Do **not** commit immediately after the script runs.
-2. Review the summary output and post-check queries in the same session.
-3. If anything is off, issue `ROLLBACK` before commit.
+1. Run the apply script.
+2. Review the emitted validation output.
+3. Run the post-check queries in the same transaction.
+4. `rollback;` if anything is unexpected.
+5. `commit;` only after review.
 
 Important limitation:
 
-- This prep lane does not add persistent backup tables or an automated post-commit undo script.
-- After commit, a clean rollback depends on the manual pre-execution exports or snapshots taken before running the backfill.
-- That is intentional: the safest prep artifact is a reviewable one-time admin script plus a manual rollback gate before commit, not destructive automated cleanup.
+- This repo intentionally does not ship an automated post-commit undo script.
+- After commit, recovery depends on the manual exports or snapshots taken before execution.
+- That is safer than bundling destructive cleanup logic into a one-off operational script.
 
 ## Recommendation
 
-This should be a docs/script PR, not a migration PR.
+This remains a docs-plus-admin-SQL workflow, not a migration workflow.
 
 Why:
 
-- The work is a one-time operational backfill, not an application schema change.
-- A migration would imply automatic or environment-coupled execution, which is riskier than needed here.
-- A runbook plus parameterized admin SQL keeps review focused on data movement, operator checks, and rollback discipline without changing runtime behavior.
+- It is a one-time operational reassignment.
+- Automatic execution would be riskier than needed.
+- The backfill should stay explicit, reviewable, and human-approved.

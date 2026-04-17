@@ -82,6 +82,7 @@ Current runtime behavior:
 - Auth v0 is live and closes public UI access.
 - The live ownership key is the authenticated Supabase user id (`auth.users.id`) extracted from the verified bearer token.
 - Legacy rows that still exist under `owner_key = 'solo'` are not auto-backfilled by the app. Use the manual admin backfill path if that historical data still matters.
+- The admin dry-run/apply workflow for that legacy backfill lives in [`docs/legacy-solo-backfill-runbook.md`](/C:/Users/user/push-up-tracking-app/docs/legacy-solo-backfill-runbook.md).
 - Same-day local-over-remote conflict behavior still exists on initial merge.
 
 ## Local Dev and Deployment
