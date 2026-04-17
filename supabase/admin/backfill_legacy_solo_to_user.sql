@@ -1,7 +1,7 @@
--- One-time admin backfill preparation for legacy owner_key = 'solo' data.
+-- Manual admin-only apply script for legacy owner_key = 'solo' backfill.
 -- Do not run automatically.
 -- Replace __TARGET_USER_ID__ before any real execution.
--- Intended to be executed manually after PR1 validation in a single transaction.
+-- Run only after the dry-run script reports apply_ready = true.
 
 begin;
 
@@ -15,11 +15,10 @@ values ('solo', '__TARGET_USER_ID__');
 
 do $$
 declare
-  v_source_owner_key text;
   v_target_owner_key text;
 begin
-  select source_owner_key, target_owner_key
-  into v_source_owner_key, v_target_owner_key
+  select target_owner_key
+  into v_target_owner_key
   from backfill_params;
 
   if v_target_owner_key = '__TARGET_USER_ID__' then
@@ -30,215 +29,259 @@ begin
     raise exception 'Target owner key must not be empty.';
   end if;
 
-  if v_source_owner_key = v_target_owner_key then
-    raise exception 'Source and target owner keys must differ.';
+  if v_target_owner_key = 'solo' then
+    raise exception 'Target owner key must not be solo.';
+  end if;
+
+  begin
+    perform v_target_owner_key::uuid;
+  exception
+    when invalid_text_representation then
+      raise exception 'Target owner key must be a valid auth.users uuid.';
+  end;
+
+  if not exists (
+    select 1
+    from auth.users
+    where id = v_target_owner_key::uuid
+  ) then
+    raise exception 'Target user % was not found in auth.users.', v_target_owner_key;
   end if;
 end $$;
 
-create temporary table backfill_day_map (
-  source_day_id bigint primary key,
-  target_day_id bigint not null,
-  day date not null
-) on commit drop;
-
-create temporary table backfill_exercise_map (
-  source_exercise_id bigint primary key,
-  target_exercise_id bigint not null
-) on commit drop;
-
--- Pre-check snapshot for operator review inside the same transaction.
-select 'user_settings' as table_name, owner_key, count(*) as row_count
+create temporary table source_user_settings on commit drop as
+select owner_key, created_at, updated_at
 from public.user_settings
-where owner_key in (
-  (select source_owner_key from backfill_params),
-  (select target_owner_key from backfill_params)
-)
-group by table_name, owner_key
+where owner_key = (select source_owner_key from backfill_params);
 
-union all
+create temporary table target_user_settings on commit drop as
+select owner_key, created_at, updated_at
+from public.user_settings
+where owner_key = (select target_owner_key from backfill_params);
 
-select 'pushup_days' as table_name, owner_key, count(*) as row_count
+create temporary table source_pushup_days on commit drop as
+select day, reps, created_at, updated_at
 from public.pushup_days
-where owner_key in (
-  (select source_owner_key from backfill_params),
-  (select target_owner_key from backfill_params)
+where owner_key = (select source_owner_key from backfill_params)
+order by day;
+
+create temporary table source_workout_days on commit drop as
+select id, day, created_at, updated_at
+from public.workout_days
+where owner_key = (select source_owner_key from backfill_params)
+order by day, id;
+
+create temporary table pushup_day_conflicts on commit drop as
+select
+  s.day,
+  s.reps as solo_reps,
+  t.reps as target_reps
+from source_pushup_days s
+join public.pushup_days t
+  on t.owner_key = (select target_owner_key from backfill_params)
+ and t.day = s.day
+order by s.day;
+
+create temporary table workout_day_conflicts on commit drop as
+select
+  s.day,
+  s.id as solo_workout_day_id,
+  t.id as target_workout_day_id
+from source_workout_days s
+join public.workout_days t
+  on t.owner_key = (select target_owner_key from backfill_params)
+ and t.day = s.day
+order by s.day, s.id;
+
+create temporary table source_workout_descendant_totals on commit drop as
+select
+  count(distinct we.id) as workout_exercise_count,
+  count(distinct ws.id) as workout_set_count
+from source_workout_days wd
+left join public.workout_exercises we
+  on we.workout_day_id = wd.id
+left join public.workout_sets ws
+  on ws.workout_exercise_id = we.id;
+
+do $$
+declare
+  v_source_owner_scoped_rows integer;
+begin
+  select
+    (select count(*) from source_user_settings)
+    + (select count(*) from source_pushup_days)
+    + (select count(*) from source_workout_days)
+  into v_source_owner_scoped_rows;
+
+  if v_source_owner_scoped_rows = 0 then
+    raise exception 'No owner-scoped solo rows were found to backfill.';
+  end if;
+
+  if (select count(*) from source_user_settings) > 0
+    and (select count(*) from target_user_settings) > 0 then
+    raise exception 'Target owner already has user_settings. Resolve that manually before backfill.';
+  end if;
+
+  if (select count(*) from pushup_day_conflicts) > 0 then
+    raise exception 'Push-up day collisions exist for the target owner. Resolve them before backfill.';
+  end if;
+
+  if (select count(*) from workout_day_conflicts) > 0 then
+    raise exception 'Workout day collisions exist for the target owner. Resolve them before backfill.';
+  end if;
+end $$;
+
+create temporary table moved_user_settings on commit drop as
+with updated as (
+  update public.user_settings u
+  set owner_key = p.target_owner_key
+  from backfill_params p
+  where u.owner_key = p.source_owner_key
+  returning u.owner_key, u.created_at, u.updated_at
 )
-group by table_name, owner_key
+select * from updated;
+
+create temporary table moved_pushup_days on commit drop as
+with updated as (
+  update public.pushup_days pd
+  set owner_key = p.target_owner_key
+  from backfill_params p
+  where pd.owner_key = p.source_owner_key
+  returning pd.day, pd.reps, pd.created_at, pd.updated_at
+)
+select * from updated;
+
+create temporary table moved_workout_days on commit drop as
+with updated as (
+  update public.workout_days wd
+  set owner_key = p.target_owner_key
+  from backfill_params p
+  where wd.owner_key = p.source_owner_key
+  returning wd.id, wd.day, wd.created_at, wd.updated_at
+)
+select * from updated;
+
+create temporary table moved_workout_descendant_totals on commit drop as
+select
+  count(distinct we.id) as workout_exercise_count,
+  count(distinct ws.id) as workout_set_count
+from moved_workout_days wd
+left join public.workout_exercises we
+  on we.workout_day_id = wd.id
+left join public.workout_sets ws
+  on ws.workout_exercise_id = we.id;
+
+do $$
+begin
+  if (select count(*) from public.user_settings where owner_key = (select source_owner_key from backfill_params)) <> 0 then
+    raise exception 'Source owner still has user_settings rows after update.';
+  end if;
+
+  if (select count(*) from public.pushup_days where owner_key = (select source_owner_key from backfill_params)) <> 0 then
+    raise exception 'Source owner still has pushup_days rows after update.';
+  end if;
+
+  if (select count(*) from public.workout_days where owner_key = (select source_owner_key from backfill_params)) <> 0 then
+    raise exception 'Source owner still has workout_days rows after update.';
+  end if;
+
+  if (select count(*) from moved_user_settings) <> (select count(*) from source_user_settings) then
+    raise exception 'Moved user_settings count did not match source count.';
+  end if;
+
+  if (select count(*) from moved_pushup_days) <> (select count(*) from source_pushup_days) then
+    raise exception 'Moved pushup_days count did not match source count.';
+  end if;
+
+  if (select count(*) from moved_workout_days) <> (select count(*) from source_workout_days) then
+    raise exception 'Moved workout_days count did not match source count.';
+  end if;
+
+  if coalesce((select workout_exercise_count from source_workout_descendant_totals), 0)
+    <> coalesce((select workout_exercise_count from moved_workout_descendant_totals), 0) then
+    raise exception 'Workout exercise descendant count changed unexpectedly during owner reassignment.';
+  end if;
+
+  if coalesce((select workout_set_count from source_workout_descendant_totals), 0)
+    <> coalesce((select workout_set_count from moved_workout_descendant_totals), 0) then
+    raise exception 'Workout set descendant count changed unexpectedly during owner reassignment.';
+  end if;
+end $$;
+
+select
+  p.target_owner_key as target_owner_key,
+  u.email as target_user_email,
+  (select count(*) from moved_user_settings) as moved_user_settings_count,
+  (select count(*) from moved_pushup_days) as moved_pushup_day_count,
+  (select count(*) from moved_workout_days) as moved_workout_day_count,
+  coalesce((select workout_exercise_count from moved_workout_descendant_totals), 0) as validated_workout_exercise_count,
+  coalesce((select workout_set_count from moved_workout_descendant_totals), 0) as validated_workout_set_count
+from backfill_params p
+join auth.users u
+  on u.id = p.target_owner_key::uuid;
+
+select
+  'user_settings' as table_name,
+  count(*) as remaining_solo_rows
+from public.user_settings
+where owner_key = (select source_owner_key from backfill_params)
 
 union all
 
-select 'workout_days' as table_name, owner_key, count(*) as row_count
+select
+  'pushup_days' as table_name,
+  count(*) as remaining_solo_rows
+from public.pushup_days
+where owner_key = (select source_owner_key from backfill_params)
+
+union all
+
+select
+  'workout_days' as table_name,
+  count(*) as remaining_solo_rows
 from public.workout_days
-where owner_key in (
-  (select source_owner_key from backfill_params),
-  (select target_owner_key from backfill_params)
-)
-group by table_name, owner_key
-order by table_name, owner_key;
+where owner_key = (select source_owner_key from backfill_params)
+order by table_name;
 
--- Merge pushup_settings with target-user precedence.
--- Top-level target keys win on conflict.
--- Nested entries merge by day key with target entries winning on conflict.
-insert into public.user_settings (owner_key, pushup_settings, created_at, updated_at)
 select
-  p.target_owner_key,
-  case
-    when t.owner_key is null then coalesce(s.pushup_settings, '{}'::jsonb)
-    else jsonb_set(
-      (coalesce(s.pushup_settings, '{}'::jsonb) - 'entries')
-      || (coalesce(t.pushup_settings, '{}'::jsonb) - 'entries'),
-      '{entries}',
-      coalesce(
-        case
-          when jsonb_typeof(s.pushup_settings -> 'entries') = 'object' then s.pushup_settings -> 'entries'
-          else '{}'::jsonb
-        end,
-        '{}'::jsonb
-      )
-      || coalesce(
-        case
-          when jsonb_typeof(t.pushup_settings -> 'entries') = 'object' then t.pushup_settings -> 'entries'
-          else '{}'::jsonb
-        end,
-        '{}'::jsonb
-      ),
-      true
-    )
-  end as merged_pushup_settings,
-  coalesce(t.created_at, s.created_at, now()) as created_at,
-  coalesce(t.updated_at, s.updated_at, now()) as updated_at
-from backfill_params p
-join public.user_settings s
-  on s.owner_key = p.source_owner_key
-left join public.user_settings t
-  on t.owner_key = p.target_owner_key
-on conflict (owner_key) do update
-set
-  pushup_settings = excluded.pushup_settings,
-  updated_at = excluded.updated_at;
+  'user_settings' as table_name,
+  count(*) as target_rows_after_apply
+from public.user_settings
+where owner_key = (select target_owner_key from backfill_params)
 
--- Copy pushup_days only when the target does not already own that day.
-insert into public.pushup_days (owner_key, day, reps, created_at, updated_at)
+union all
+
 select
-  p.target_owner_key,
-  s.day,
-  s.reps,
-  s.created_at,
-  s.updated_at
-from public.pushup_days s
-join backfill_params p
-  on s.owner_key = p.source_owner_key
-left join public.pushup_days t
-  on t.owner_key = p.target_owner_key
- and t.day = s.day
-where t.owner_key is null
-on conflict (owner_key, day) do nothing;
+  'pushup_days' as table_name,
+  count(*) as target_rows_after_apply
+from public.pushup_days
+where owner_key = (select target_owner_key from backfill_params)
 
--- Copy workout_days only when the target does not already own that day.
-with candidate_days as (
-  select
-    s.id as source_day_id,
-    s.day,
-    s.created_at,
-    s.updated_at,
-    p.target_owner_key
-  from public.workout_days s
-  join backfill_params p
-    on s.owner_key = p.source_owner_key
-  left join public.workout_days t
-    on t.owner_key = p.target_owner_key
-   and t.day = s.day
-  where t.id is null
-),
-inserted_days as (
-  insert into public.workout_days (owner_key, day, created_at, updated_at)
-  select target_owner_key, day, created_at, updated_at
-  from candidate_days
-  returning id, day
-)
-insert into backfill_day_map (source_day_id, target_day_id, day)
+union all
+
 select
-  c.source_day_id,
-  i.id as target_day_id,
-  c.day
-from candidate_days c
-join inserted_days i
-  on i.day = c.day;
+  'workout_days' as table_name,
+  count(*) as target_rows_after_apply
+from public.workout_days
+where owner_key = (select target_owner_key from backfill_params)
+order by table_name;
 
--- Copy workout_exercises for only the newly inserted workout days.
-with candidate_exercises as (
-  select
-    e.id as source_exercise_id,
-    m.target_day_id,
-    e.sort_order,
-    e.exercise_name,
-    e.category,
-    e.created_at
-  from public.workout_exercises e
-  join backfill_day_map m
-    on m.source_day_id = e.workout_day_id
-),
-inserted_exercises as (
-  insert into public.workout_exercises (
-    workout_day_id,
-    sort_order,
-    exercise_name,
-    category,
-    created_at
-  )
-  select
-    target_day_id,
-    sort_order,
-    exercise_name,
-    category,
-    created_at
-  from candidate_exercises
-  returning id, workout_day_id, sort_order
-)
-insert into backfill_exercise_map (source_exercise_id, target_exercise_id)
 select
-  c.source_exercise_id,
-  i.id as target_exercise_id
-from candidate_exercises c
-join inserted_exercises i
-  on i.workout_day_id = c.target_day_id
- and i.sort_order = c.sort_order;
+  wd.id as moved_workout_day_id,
+  wd.day,
+  count(distinct we.id) as workout_exercise_count,
+  count(distinct ws.id) as workout_set_count
+from moved_workout_days wd
+left join public.workout_exercises we
+  on we.workout_day_id = wd.id
+left join public.workout_sets ws
+  on ws.workout_exercise_id = we.id
+group by wd.id, wd.day
+order by wd.day, wd.id;
 
--- Copy workout_sets for only the newly inserted exercises.
-insert into public.workout_sets (
-  workout_exercise_id,
-  sort_order,
-  reps,
-  weight,
-  created_at
-)
-select
-  m.target_exercise_id,
-  s.sort_order,
-  s.reps,
-  s.weight,
-  s.created_at
-from public.workout_sets s
-join backfill_exercise_map m
-  on m.source_exercise_id = s.workout_exercise_id
-on conflict (workout_exercise_id, sort_order) do nothing;
-
--- Summary for operator review before deciding whether to COMMIT or ROLLBACK.
-select
-  (select target_owner_key from backfill_params) as target_owner_key,
-  (select count(*) from public.pushup_days where owner_key = (select target_owner_key from backfill_params)) as target_pushup_day_count,
-  (select count(*) from public.workout_days where owner_key = (select target_owner_key from backfill_params)) as target_workout_day_count,
-  (select count(*) from backfill_day_map) as inserted_workout_day_count,
-  (select count(*) from backfill_exercise_map) as inserted_workout_exercise_count,
-  (
-    select count(*)
-    from public.workout_sets ws
-    join backfill_exercise_map em
-      on em.target_exercise_id = ws.workout_exercise_id
-  ) as inserted_workout_set_count;
-
--- Review results now.
--- If everything is correct, COMMIT manually.
--- If anything is off, ROLLBACK manually.
+-- Review the output above.
+-- Run post-check queries if needed in the same transaction.
+-- COMMIT manually only after review.
+-- Use ROLLBACK if anything is unexpected.
 -- commit;
 -- rollback;
