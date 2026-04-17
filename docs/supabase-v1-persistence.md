@@ -32,6 +32,29 @@ Canonical reference for the shipped Supabase-backed persistence path now live in
 
 `/api/persistence` is the only cloud persistence boundary for application data. The browser does not call Supabase tables directly.
 
+## Required Configuration
+
+### Browser / Build Variables
+
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_PUBLISHABLE_KEY`
+
+These power the browser-side Supabase Auth client used for magic-link sign-in, session restore, and sign-out.
+
+### Server / Vercel Variables
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `SUPABASE_SECRET_KEY`
+
+`api/persistence.js` currently reads those exact server-side names. `SUPABASE_SECRET_KEY` is the only secret in the current setup and belongs only in Vercel server context.
+
+### Supabase Project Setup
+
+- Use the same Supabase project for both the browser auth client and the Vercel serverless function.
+- Allow redirect URLs for the local dev origin and the Vercel deployment origins you actually use.
+- Pre-create or invite approved users in Supabase Auth. The current magic-link flow uses `shouldCreateUser: false`, so unknown emails cannot self-register.
+- Treat older AWS / DynamoDB planning notes as historical only. The shipped runtime is Vercel + Supabase.
+
 ## Current Schema
 
 Supabase v1 currently defines:
@@ -53,14 +76,29 @@ Current runtime behavior:
 - `app.tab` remains local-only in `localStorage`.
 - Push-up daily goal settings still remain local-only.
 - localStorage fallback remains enabled during rollout.
+- Authenticated screens now show a compact sync indicator for cloud load, save, save success, and cloud-sync failures.
 - Auth v0 is live and closes public UI access.
 - Ownership is still hard-coded to `owner_key = 'solo'`.
 - Auth protects the persistence API, but persisted data is not yet partitioned per authenticated user.
 - Same-day local-over-remote conflict behavior still exists on initial merge.
 
+## Local Dev and Deployment
+
+- `npm run dev` runs the Vite SPA, not the Vercel serverless function.
+- Browser auth can still be exercised locally with the `VITE_` variables and a matching Supabase redirect URL.
+- Full `/api/persistence` verification should happen on a Vercel preview or production deployment with all four environment variables configured.
+- Vercel deployment is the current source of truth for shipped behavior: static SPA build plus `api/persistence.js` from the same repo.
+
+## Troubleshooting
+
+- Browser startup throws a missing Supabase env error: check `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`.
+- `/api/persistence` returns `503`: Vercel is missing `NEXT_PUBLIC_SUPABASE_URL` or `SUPABASE_SECRET_KEY`.
+- Magic-link sign-in does not complete after opening the email: the origin is missing from Supabase redirect URLs, or the email is not an approved Auth user.
+- `/api/persistence` returns `401` after sign-in: the browser and server are pointed at different Supabase projects, or the bearer token is stale.
+- Local edits seem to work in `npm run dev` but do not show up elsewhere: expected when only `localStorage` fallback is active because the Vercel route is not running locally.
+
 ## Follow-Up That Still Remains
 
-- Add clearer error handling and loading states for cloud save/load.
 - Replace the current hard-coded solo owner model with user-scoped persistence tied to the authenticated user.
 - Add SMTP/custom email provider setup and auth rate-limit hardening when moving beyond the current minimal auth gate.
 - Decide whether and when to remove localStorage fallback.

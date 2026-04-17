@@ -19,8 +19,14 @@ vi.mock('./cloudPersistence', () => ({
 beforeEach(() => {
   loadPersistenceSnapshot.mockReset();
   savePushupEntries.mockReset();
-  loadPersistenceSnapshot.mockImplementation(() => new Promise(() => {}));
-  savePushupEntries.mockResolvedValue(undefined);
+  loadPersistenceSnapshot.mockResolvedValue({
+    kind: 'success',
+    snapshot: {
+      entries: {},
+      workouts: {},
+    },
+  });
+  savePushupEntries.mockResolvedValue({ kind: 'success' });
 });
 
 describe('PushUps screen', () => {
@@ -98,10 +104,13 @@ describe('PushUps screen', () => {
   it('loads a persisted cloud push-up entry on mount', async () => {
     const day = todayKey();
     loadPersistenceSnapshot.mockResolvedValue({
-      entries: {
-        [day]: { date: day, sets: [10] },
+      kind: 'success',
+      snapshot: {
+        entries: {
+          [day]: { date: day, sets: [10] },
+        },
+        workouts: {},
       },
-      workouts: {},
     });
 
     render(<PushUps />);
@@ -113,8 +122,11 @@ describe('PushUps screen', () => {
     const user = userEvent.setup();
     const day = todayKey();
     loadPersistenceSnapshot.mockResolvedValue({
-      entries: {},
-      workouts: {},
+      kind: 'success',
+      snapshot: {
+        entries: {},
+        workouts: {},
+      },
     });
 
     render(<PushUps />);

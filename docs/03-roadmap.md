@@ -18,8 +18,6 @@ Related issues: [#9](https://github.com/itprodirect/push-up-tracking-app/issues/
 _Post-auth-v0 hardening and user-scoped persistence._
 
 - Replace temporary `owner_key = 'solo'` persistence with data scoped to the authenticated user
-- Add error handling and loading states for cloud save/load -> [#18](https://github.com/itprodirect/push-up-tracking-app/issues/18)
-- Clean up environment and deployment documentation -> [#17](https://github.com/itprodirect/push-up-tracking-app/issues/17)
 
 ## Next
 

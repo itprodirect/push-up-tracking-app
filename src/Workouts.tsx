@@ -5,6 +5,8 @@ import {
   mergeWorkoutsWithLocalFallback,
   saveWorkoutDays,
 } from './cloudPersistence';
+import type { CloudLoadResult, CloudSaveResult } from './cloudPersistence';
+import type { OnCloudSyncStatusChange } from './cloudSyncStatus';
 import {
   WorkoutDay,
   WorkoutExercise,
@@ -26,8 +28,13 @@ import {
 } from './exerciseCatalog';
 
 const EXERCISE_CATALOG_ID = 'exercise-catalog';
+const noopSyncStatusChange: OnCloudSyncStatusChange = () => {};
 
-export default function Workouts() {
+export default function Workouts({
+  onSyncStatusChange = noopSyncStatusChange,
+}: {
+  onSyncStatusChange?: OnCloudSyncStatusChange;
+}) {
   const [days, setDays] = useState<Record<string, WorkoutDay>>(() => loadWorkouts());
   const [range, setRange] = useState<TrendRange>(30);
   const [logRange, setLogRange] = useState<LogRange>('week');
@@ -39,6 +46,7 @@ export default function Workouts() {
   const [cloudReady, setCloudReady] = useState(() => !CLOUD_PERSISTENCE_ENABLED);
   const skipNextCloudSave = useRef(false);
   const pendingCloudDay = useRef<string | null>(null);
+  const latestSaveId = useRef(0);
 
   useEffect(() => saveWorkouts(days), [days]);
 
@@ -46,23 +54,25 @@ export default function Workouts() {
     if (!CLOUD_PERSISTENCE_ENABLED) return;
 
     let cancelled = false;
+    onSyncStatusChange({ kind: 'loading' });
 
     void (async () => {
-      const snapshot = await loadPersistenceSnapshot();
+      const result = await loadPersistenceSnapshot();
       if (cancelled) return;
 
-      if (snapshot && Object.keys(snapshot.workouts).length > 0) {
+      if (result.kind === 'success' && Object.keys(result.snapshot.workouts).length > 0) {
         skipNextCloudSave.current = true;
-        setDays((prev) => mergeWorkoutsWithLocalFallback(snapshot.workouts, prev));
+        setDays((prev) => mergeWorkoutsWithLocalFallback(result.snapshot.workouts, prev));
       }
 
       setCloudReady(true);
+      applyLoadStatus(result, onSyncStatusChange);
     })();
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [onSyncStatusChange]);
 
   useEffect(() => {
     if (!cloudReady) return;
@@ -73,8 +83,14 @@ export default function Workouts() {
     const day = pendingCloudDay.current;
     if (!day) return;
     pendingCloudDay.current = null;
-    void saveWorkoutDays(day, days[day] ?? null);
-  }, [cloudReady, days]);
+    const saveId = ++latestSaveId.current;
+    onSyncStatusChange({ kind: 'saving' });
+    void (async () => {
+      const result = await saveWorkoutDays(day, days[day] ?? null);
+      if (saveId !== latestSaveId.current) return;
+      applySaveStatus(result, onSyncStatusChange);
+    })();
+  }, [cloudReady, days, onSyncStatusChange]);
 
   const isToday = viewDate === todayKey();
   const day = days[viewDate];
@@ -311,6 +327,40 @@ export default function Workouts() {
       />
     </>
   );
+}
+
+function applyLoadStatus(result: CloudLoadResult, onSyncStatusChange: OnCloudSyncStatusChange) {
+  switch (result.kind) {
+    case 'success':
+      onSyncStatusChange({ kind: 'load_success' });
+      return;
+    case 'auth_error':
+      onSyncStatusChange({ kind: 'auth_error' });
+      return;
+    case 'error':
+      onSyncStatusChange({ kind: 'error' });
+      return;
+    case 'disabled':
+      onSyncStatusChange({ kind: 'idle' });
+      return;
+  }
+}
+
+function applySaveStatus(result: CloudSaveResult, onSyncStatusChange: OnCloudSyncStatusChange) {
+  switch (result.kind) {
+    case 'success':
+      onSyncStatusChange({ kind: 'save_success' });
+      return;
+    case 'auth_error':
+      onSyncStatusChange({ kind: 'auth_error' });
+      return;
+    case 'error':
+      onSyncStatusChange({ kind: 'error' });
+      return;
+    case 'disabled':
+      onSyncStatusChange({ kind: 'idle' });
+      return;
+  }
 }
 
 function ExerciseCard({

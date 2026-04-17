@@ -35,6 +35,15 @@ Browser (Vite + React SPA on Vercel)
 - The endpoint requires `Authorization: Bearer <jwt>` and returns `401` for missing or invalid tokens.
 - Supabase credentials live in Vercel environment variables, never in the browser.
 
+### Runtime Configuration
+
+- The browser auth client reads `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`.
+- The serverless persistence boundary currently reads `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SECRET_KEY`.
+- `SUPABASE_SECRET_KEY` is server-only and must never be exposed through `VITE_` variables or client code.
+- The project URL is configured twice today because the browser bundle and the Vercel serverless function read different env variable names.
+- `npm run dev` starts the Vite SPA only; it does not provide full local parity for `/api/persistence`.
+- End-to-end auth plus cloud persistence verification should happen on a deployed Vercel environment.
+
 ### Supabase Role
 
 Supabase v1 is the current cloud persistence backend. Schema lives in:
@@ -70,9 +79,11 @@ Current practical usage:
 - It still stores browser-local state and acts as fallback during rollout.
 - The client loads local data first, then merges the remote snapshot from `/api/persistence`.
 - Writes remain local-first and then asynchronously post updates to the serverless endpoint.
+- This fallback means plain local SPA development can still appear healthy even when the serverless route is unavailable.
 
 ## Intentionally Deferred
 
+- Any return to the earlier AWS / DynamoDB planning path. Those notes are historical only, not the live runtime.
 - Direct browser -> Supabase table access
 - User-scoped persistence and multi-user ownership
 - Rich sync or conflict handling beyond current local-over-remote merge behavior

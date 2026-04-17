@@ -156,6 +156,41 @@ button {
   padding: 20px 16px calc(96px + env(safe-area-inset-bottom));
 }
 
+.sync-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-elev);
+  color: var(--text-dim);
+  font-size: 14px;
+}
+
+.sync-status.pending {
+  color: #67e8f9;
+}
+
+.sync-status.success {
+  border-color: #0f766e;
+  color: #6ee7b7;
+}
+
+.sync-status.error {
+  border-color: #b91c1c;
+  color: #fca5a5;
+}
+
+.sync-status-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: currentColor;
+}
+
 .header {
   display: flex;
   align-items: baseline;
