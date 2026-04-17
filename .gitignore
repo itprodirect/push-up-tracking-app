@@ -12,6 +12,9 @@ dev-dist
 # Local tooling / test artifacts
 .claude/
 .playwright-mcp/
+playwright-report/
+test-results/
+playwright/.auth/
 *.png
 !public/*.png
 tsconfig.tsbuildinfo

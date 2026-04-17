@@ -23,6 +23,13 @@ npm run dev
 ```bash
 npm test
 npm run build
+npm run test:e2e
+```
+
+Install the Playwright browser once before the first E2E run:
+
+```bash
+npx playwright install chromium
 ```
 
 ### Local Dev Flow
@@ -31,6 +38,13 @@ npm run build
 - Supabase sign-in in local dev depends on `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, and a Supabase Auth redirect URL for `http://localhost:5173`.
 - The cloud persistence route lives at Vercel `api/persistence.js`. Plain Vite dev does not emulate that serverless route, so cloud save/load should be verified on a deployed Vercel preview or production environment.
 - Because rollout fallback is still enabled, missing local API access falls back quietly to `localStorage` instead of breaking the UI.
+
+### Playwright E2E
+
+- `npm run test:e2e` starts a local Vite server with dummy Supabase browser env and runs a minimal Chromium-only Playwright suite.
+- The E2E layer seeds a reusable authenticated `storageState` instead of re-running magic-link login in every test.
+- Tests intercept `/api/persistence` directly, which keeps coverage focused on the shipped cloud boundary without requiring a live Vercel API or Supabase project.
+- Playwright blocks service workers in this suite so request routing on `/api/persistence` cannot be bypassed by future SW changes.
 
 ## Deploy on Vercel
 
