@@ -31,11 +31,13 @@ const EXERCISE_CATALOG_ID = 'exercise-catalog';
 const noopSyncStatusChange: OnCloudSyncStatusChange = () => {};
 
 export default function Workouts({
+  storageOwnerKey,
   onSyncStatusChange = noopSyncStatusChange,
 }: {
+  storageOwnerKey?: string;
   onSyncStatusChange?: OnCloudSyncStatusChange;
 }) {
-  const [days, setDays] = useState<Record<string, WorkoutDay>>(() => loadWorkouts());
+  const [days, setDays] = useState<Record<string, WorkoutDay>>(() => loadWorkouts(storageOwnerKey));
   const [range, setRange] = useState<TrendRange>(30);
   const [logRange, setLogRange] = useState<LogRange>('week');
   const [viewDate, setViewDate] = useState<string>(() => todayKey());
@@ -48,7 +50,7 @@ export default function Workouts({
   const pendingCloudDay = useRef<string | null>(null);
   const latestSaveId = useRef(0);
 
-  useEffect(() => saveWorkouts(days), [days]);
+  useEffect(() => saveWorkouts(days, storageOwnerKey), [days, storageOwnerKey]);
 
   useEffect(() => {
     if (!CLOUD_PERSISTENCE_ENABLED) return;

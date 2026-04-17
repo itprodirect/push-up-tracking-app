@@ -163,7 +163,7 @@ export default function Root() {
           </p>
         )}
       </div>
-      <App />
+      <App key={session.user.id} userId={session.user.id} />
     </div>
   );
 }

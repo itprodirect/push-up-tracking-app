@@ -5,7 +5,7 @@ import Workouts from './Workouts';
 
 type Tab = 'pushups' | 'workouts';
 
-export default function App() {
+export default function App({ userId }: { userId: string }) {
   const [tab, setTab] = useState<Tab>(() => {
     const saved = localStorage.getItem('app.tab');
     return saved === 'workouts' ? 'workouts' : 'pushups';
@@ -45,9 +45,9 @@ export default function App() {
         </div>
       )}
       {tab === 'pushups' ? (
-        <PushUps onSyncStatusChange={setSyncStatus} />
+        <PushUps storageOwnerKey={userId} onSyncStatusChange={setSyncStatus} />
       ) : (
-        <Workouts onSyncStatusChange={setSyncStatus} />
+        <Workouts storageOwnerKey={userId} onSyncStatusChange={setSyncStatus} />
       )}
       <nav className="tab-bar" role="tablist" aria-label="Primary">
         <button

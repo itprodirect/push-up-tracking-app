@@ -21,11 +21,13 @@ import { TrendChart, TrendRange } from './TrendChart';
 const noopSyncStatusChange: OnCloudSyncStatusChange = () => {};
 
 export default function PushUps({
+  storageOwnerKey,
   onSyncStatusChange = noopSyncStatusChange,
 }: {
+  storageOwnerKey?: string;
   onSyncStatusChange?: OnCloudSyncStatusChange;
 }) {
-  const [entries, setEntries] = useState<Record<string, DayEntry>>(() => loadEntries());
+  const [entries, setEntries] = useState<Record<string, DayEntry>>(() => loadEntries(storageOwnerKey));
   const [settings, setSettings] = useState(() => loadSettings());
   const [range, setRange] = useState<TrendRange>(30);
   const [showSettings, setShowSettings] = useState(false);
@@ -35,7 +37,7 @@ export default function PushUps({
   const pendingCloudDay = useRef<string | null>(null);
   const latestSaveId = useRef(0);
 
-  useEffect(() => saveEntries(entries), [entries]);
+  useEffect(() => saveEntries(entries, storageOwnerKey), [entries, storageOwnerKey]);
   useEffect(() => saveSettings(settings), [settings]);
 
   useEffect(() => {

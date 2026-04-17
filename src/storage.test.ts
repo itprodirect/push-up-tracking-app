@@ -107,8 +107,24 @@ describe('groupSets', () => {
 describe('localStorage round-trips', () => {
   it('saves and loads push-up entries', () => {
     const entries = { '2026-04-13': { date: '2026-04-13', sets: [10, 20] } };
-    saveEntries(entries);
-    expect(loadEntries()).toEqual(entries);
+    saveEntries(entries, 'user-a');
+    expect(loadEntries('user-a')).toEqual(entries);
+  });
+
+  it('keeps push-up entries isolated by authenticated user scope', () => {
+    const entries = { '2026-04-13': { date: '2026-04-13', sets: [10, 20] } };
+    saveEntries(entries, 'user-a');
+
+    expect(loadEntries('user-a')).toEqual(entries);
+    expect(loadEntries('user-b')).toEqual({});
+  });
+
+  it('claims legacy push-up local fallback for only the first authenticated user scope', () => {
+    const entries = { '2026-04-13': { date: '2026-04-13', sets: [10, 20] } };
+    localStorage.setItem('pushup.entries.v1', JSON.stringify(entries));
+
+    expect(loadEntries('user-a')).toEqual(entries);
+    expect(loadEntries('user-b')).toEqual({});
   });
 
   it('returns empty object when entries key is missing', () => {
@@ -166,8 +182,28 @@ describe('localStorage round-trips', () => {
         ],
       },
     };
-    saveWorkouts(workouts);
-    expect(loadWorkouts()).toEqual(workouts);
+    saveWorkouts(workouts, 'user-a');
+    expect(loadWorkouts('user-a')).toEqual(workouts);
+  });
+
+  it('keeps workouts isolated by authenticated user scope', () => {
+    const workouts = {
+      '2026-04-13': {
+        date: '2026-04-13',
+        exercises: [
+          {
+            id: 'a',
+            name: 'Bench',
+            category: 'Chest / Push' as const,
+            sets: [{ weight: 100, reps: 10 }],
+          },
+        ],
+      },
+    };
+    saveWorkouts(workouts, 'user-a');
+
+    expect(loadWorkouts('user-a')).toEqual(workouts);
+    expect(loadWorkouts('user-b')).toEqual({});
   });
 
   it('normalizes malformed workout shapes instead of trusting them directly', () => {
