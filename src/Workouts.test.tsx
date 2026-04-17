@@ -19,8 +19,14 @@ vi.mock('./cloudPersistence', () => ({
 beforeEach(() => {
   loadPersistenceSnapshot.mockReset();
   saveWorkoutDays.mockReset();
-  loadPersistenceSnapshot.mockImplementation(() => new Promise(() => {}));
-  saveWorkoutDays.mockResolvedValue(undefined);
+  loadPersistenceSnapshot.mockResolvedValue({
+    kind: 'success',
+    snapshot: {
+      entries: {},
+      workouts: {},
+    },
+  });
+  saveWorkoutDays.mockResolvedValue({ kind: 'success' });
 });
 
 // A number like "1,000" can legitimately appear many times on the screen
@@ -239,18 +245,21 @@ describe('Workouts screen', () => {
   it('loads a persisted cloud workout on mount', async () => {
     const day = todayKey();
     loadPersistenceSnapshot.mockResolvedValue({
-      entries: {},
-      workouts: {
-        [day]: {
-          date: day,
-          exercises: [
-            {
-              id: 'cloud-ex-1',
-              name: 'Bench Press',
-              category: 'Chest / Push',
-              sets: [{ weight: 100, reps: 10 }],
-            },
-          ],
+      kind: 'success',
+      snapshot: {
+        entries: {},
+        workouts: {
+          [day]: {
+            date: day,
+            exercises: [
+              {
+                id: 'cloud-ex-1',
+                name: 'Bench Press',
+                category: 'Chest / Push',
+                sets: [{ weight: 100, reps: 10 }],
+              },
+            ],
+          },
         },
       },
     });
@@ -265,8 +274,11 @@ describe('Workouts screen', () => {
     const user = userEvent.setup();
     const day = todayKey();
     loadPersistenceSnapshot.mockResolvedValue({
-      entries: {},
-      workouts: {},
+      kind: 'success',
+      snapshot: {
+        entries: {},
+        workouts: {},
+      },
     });
 
     render(<Workouts />);

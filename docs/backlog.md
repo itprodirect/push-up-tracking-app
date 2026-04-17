@@ -5,20 +5,18 @@ This backlog tracks the next practical follow-up after the merged Supabase v1 pe
 ## P0 Immediate Next Work
 
 1. Replace temporary `owner_key = 'solo'` with user-scoped persistence keyed to the authenticated user
-2. [#18 Add error handling/loading states for cloud save/load](https://github.com/itprodirect/push-up-tracking-app/issues/18)
-3. [#17 Clean up environment and deployment documentation](https://github.com/itprodirect/push-up-tracking-app/issues/17)
 
 ## P1 Near-Term Follow-Up
 
-4. Add SMTP/custom email provider setup and auth rate-limit hardening
-5. [#16 Add historical workout views and aggregation validation against cloud data](https://github.com/itprodirect/push-up-tracking-app/issues/16)
-6. [#15 Add data export and backup flow](https://github.com/itprodirect/push-up-tracking-app/issues/15)
+2. Add SMTP/custom email provider setup and auth rate-limit hardening
+3. [#16 Add historical workout views and aggregation validation against cloud data](https://github.com/itprodirect/push-up-tracking-app/issues/16)
+4. [#15 Add data export and backup flow](https://github.com/itprodirect/push-up-tracking-app/issues/15)
 
 ## P2 Later Or Optional
 
-7. [#19 Evaluate attachments/media support backed by cloud storage](https://github.com/itprodirect/push-up-tracking-app/issues/19)
-8. [#20 Evaluate AI-assisted workout or notes workflows using stored cloud data](https://github.com/itprodirect/push-up-tracking-app/issues/20)
-9. [#21 Evaluate richer user/account management beyond limited beta access](https://github.com/itprodirect/push-up-tracking-app/issues/21)
+5. [#19 Evaluate attachments/media support backed by cloud storage](https://github.com/itprodirect/push-up-tracking-app/issues/19)
+6. [#20 Evaluate AI-assisted workout or notes workflows using stored cloud data](https://github.com/itprodirect/push-up-tracking-app/issues/20)
+7. [#21 Evaluate richer user/account management beyond limited beta access](https://github.com/itprodirect/push-up-tracking-app/issues/21)
 
 ## Sequencing Notes
 

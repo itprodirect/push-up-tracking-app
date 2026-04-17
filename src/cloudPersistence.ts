@@ -8,12 +8,24 @@ type PersistenceSnapshot = {
   workouts: Record<string, WorkoutDay>;
 };
 
-export async function loadPersistenceSnapshot(): Promise<PersistenceSnapshot | null> {
-  if (!CLOUD_PERSISTENCE_ENABLED) return null;
+export type CloudLoadResult =
+  | { kind: 'success'; snapshot: PersistenceSnapshot }
+  | { kind: 'auth_error' }
+  | { kind: 'error' }
+  | { kind: 'disabled' };
+
+export type CloudSaveResult =
+  | { kind: 'success' }
+  | { kind: 'auth_error' }
+  | { kind: 'error' }
+  | { kind: 'disabled' };
+
+export async function loadPersistenceSnapshot(): Promise<CloudLoadResult> {
+  if (!CLOUD_PERSISTENCE_ENABLED) return { kind: 'disabled' };
 
   try {
     const accessToken = await getAccessToken();
-    if (!accessToken) return null;
+    if (!accessToken) return { kind: 'auth_error' };
 
     const response = await fetch('/api/persistence', {
       headers: {
@@ -21,27 +33,30 @@ export async function loadPersistenceSnapshot(): Promise<PersistenceSnapshot | n
         Authorization: `Bearer ${accessToken}`,
       },
     });
-    if (response.status === 401) return null;
-    if (!response.ok) return null;
+    if (response.status === 401) return { kind: 'auth_error' };
+    if (!response.ok) return { kind: 'error' };
 
     const payload = await response.json();
     return {
-      entries: normalizeEntries(payload?.entries),
-      workouts: normalizeWorkouts(payload?.workouts),
+      kind: 'success',
+      snapshot: {
+        entries: normalizeEntries(payload?.entries),
+        workouts: normalizeWorkouts(payload?.workouts),
+      },
     };
   } catch {
-    return null;
+    return { kind: 'error' };
   }
 }
 
-export async function savePushupEntries(day: string, entry: DayEntry | null): Promise<void> {
-  if (!CLOUD_PERSISTENCE_ENABLED) return;
-  await postPersistence({ kind: 'pushups', day, entry });
+export async function savePushupEntries(day: string, entry: DayEntry | null): Promise<CloudSaveResult> {
+  if (!CLOUD_PERSISTENCE_ENABLED) return { kind: 'disabled' };
+  return postPersistence({ kind: 'pushups', day, entry });
 }
 
-export async function saveWorkoutDays(day: string, workout: WorkoutDay | null): Promise<void> {
-  if (!CLOUD_PERSISTENCE_ENABLED) return;
-  await postPersistence({ kind: 'workouts', day, workout });
+export async function saveWorkoutDays(day: string, workout: WorkoutDay | null): Promise<CloudSaveResult> {
+  if (!CLOUD_PERSISTENCE_ENABLED) return { kind: 'disabled' };
+  return postPersistence({ kind: 'workouts', day, workout });
 }
 
 export function mergeEntriesWithLocalFallback(
@@ -58,10 +73,10 @@ export function mergeWorkoutsWithLocalFallback(
   return { ...remote, ...local };
 }
 
-async function postPersistence(body: unknown): Promise<void> {
+async function postPersistence(body: unknown): Promise<CloudSaveResult> {
   try {
     const accessToken = await getAccessToken();
-    if (!accessToken) return;
+    if (!accessToken) return { kind: 'auth_error' };
 
     const response = await fetch('/api/persistence', {
       method: 'POST',
@@ -72,11 +87,13 @@ async function postPersistence(body: unknown): Promise<void> {
       body: JSON.stringify(body),
     });
 
-    if (response.status === 401 || !response.ok) {
-      return;
-    }
+    if (response.status === 401) return { kind: 'auth_error' };
+    if (!response.ok) return { kind: 'error' };
+
+    return { kind: 'success' };
   } catch {
     // Keep localStorage as the fallback source of truth during rollout.
+    return { kind: 'error' };
   }
 }
 

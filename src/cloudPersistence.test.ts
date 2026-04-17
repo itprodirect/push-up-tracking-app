@@ -33,7 +33,7 @@ describe('cloudPersistence auth headers and fallback', () => {
 
     const { loadPersistenceSnapshot } = await import('./cloudPersistence');
 
-    await expect(loadPersistenceSnapshot()).resolves.toBeNull();
+    await expect(loadPersistenceSnapshot()).resolves.toEqual({ kind: 'auth_error' });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -57,7 +57,7 @@ describe('cloudPersistence auth headers and fallback', () => {
     const { CLOUD_PERSISTENCE_ENABLED, loadPersistenceSnapshot } = await import('./cloudPersistence');
 
     expect(CLOUD_PERSISTENCE_ENABLED).toBe(false);
-    await expect(loadPersistenceSnapshot()).resolves.toBeNull();
+    await expect(loadPersistenceSnapshot()).resolves.toEqual({ kind: 'disabled' });
     expect(loadMarker).not.toHaveBeenCalled();
   });
 
@@ -75,8 +75,11 @@ describe('cloudPersistence auth headers and fallback', () => {
     const { loadPersistenceSnapshot } = await import('./cloudPersistence');
 
     await expect(loadPersistenceSnapshot()).resolves.toEqual({
-      entries: { '2026-04-15': { date: '2026-04-15', sets: [10, 15] } },
-      workouts: {},
+      kind: 'success',
+      snapshot: {
+        entries: { '2026-04-15': { date: '2026-04-15', sets: [10, 15] } },
+        workouts: {},
+      },
     });
     expect(fetchMock).toHaveBeenCalledWith('/api/persistence', {
       headers: {
@@ -95,7 +98,7 @@ describe('cloudPersistence auth headers and fallback', () => {
 
     const { loadPersistenceSnapshot } = await import('./cloudPersistence');
 
-    await expect(loadPersistenceSnapshot()).resolves.toBeNull();
+    await expect(loadPersistenceSnapshot()).resolves.toEqual({ kind: 'auth_error' });
   });
 
   it('skips cloud save when there is no access token', async () => {
@@ -104,7 +107,7 @@ describe('cloudPersistence auth headers and fallback', () => {
     const { savePushupEntries } = await import('./cloudPersistence');
     const entry: DayEntry = { date: '2026-04-15', sets: [20] };
 
-    await expect(savePushupEntries('2026-04-15', entry)).resolves.toBeUndefined();
+    await expect(savePushupEntries('2026-04-15', entry)).resolves.toEqual({ kind: 'auth_error' });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -118,7 +121,7 @@ describe('cloudPersistence auth headers and fallback', () => {
     const { savePushupEntries } = await import('./cloudPersistence');
     const entry: DayEntry = { date: '2026-04-15', sets: [20] };
 
-    await expect(savePushupEntries('2026-04-15', entry)).resolves.toBeUndefined();
+    await expect(savePushupEntries('2026-04-15', entry)).resolves.toEqual({ kind: 'auth_error' });
     expect(fetchMock).toHaveBeenCalledWith('/api/persistence', {
       method: 'POST',
       headers: {

@@ -5,6 +5,8 @@ import {
   mergeEntriesWithLocalFallback,
   savePushupEntries,
 } from './cloudPersistence';
+import type { CloudLoadResult, CloudSaveResult } from './cloudPersistence';
+import type { OnCloudSyncStatusChange } from './cloudSyncStatus';
 import {
   DayEntry,
   loadEntries,
@@ -16,7 +18,13 @@ import {
 import { formatHeaderDate, formatHistoryDate, parseKey, todayKey } from './dates';
 import { TrendChart, TrendRange } from './TrendChart';
 
-export default function PushUps() {
+const noopSyncStatusChange: OnCloudSyncStatusChange = () => {};
+
+export default function PushUps({
+  onSyncStatusChange = noopSyncStatusChange,
+}: {
+  onSyncStatusChange?: OnCloudSyncStatusChange;
+}) {
   const [entries, setEntries] = useState<Record<string, DayEntry>>(() => loadEntries());
   const [settings, setSettings] = useState(() => loadSettings());
   const [range, setRange] = useState<TrendRange>(30);
@@ -25,6 +33,7 @@ export default function PushUps() {
   const [cloudReady, setCloudReady] = useState(() => !CLOUD_PERSISTENCE_ENABLED);
   const skipNextCloudSave = useRef(false);
   const pendingCloudDay = useRef<string | null>(null);
+  const latestSaveId = useRef(0);
 
   useEffect(() => saveEntries(entries), [entries]);
   useEffect(() => saveSettings(settings), [settings]);
@@ -33,23 +42,25 @@ export default function PushUps() {
     if (!CLOUD_PERSISTENCE_ENABLED) return;
 
     let cancelled = false;
+    onSyncStatusChange({ kind: 'loading' });
 
     void (async () => {
-      const snapshot = await loadPersistenceSnapshot();
+      const result = await loadPersistenceSnapshot();
       if (cancelled) return;
 
-      if (snapshot && Object.keys(snapshot.entries).length > 0) {
+      if (result.kind === 'success' && Object.keys(result.snapshot.entries).length > 0) {
         skipNextCloudSave.current = true;
-        setEntries((prev) => mergeEntriesWithLocalFallback(snapshot.entries, prev));
+        setEntries((prev) => mergeEntriesWithLocalFallback(result.snapshot.entries, prev));
       }
 
       setCloudReady(true);
+      applyLoadStatus(result, onSyncStatusChange);
     })();
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [onSyncStatusChange]);
 
   useEffect(() => {
     if (!cloudReady) return;
@@ -60,8 +71,14 @@ export default function PushUps() {
     const day = pendingCloudDay.current;
     if (!day) return;
     pendingCloudDay.current = null;
-    void savePushupEntries(day, entries[day] ?? null);
-  }, [cloudReady, entries]);
+    const saveId = ++latestSaveId.current;
+    onSyncStatusChange({ kind: 'saving' });
+    void (async () => {
+      const result = await savePushupEntries(day, entries[day] ?? null);
+      if (saveId !== latestSaveId.current) return;
+      applySaveStatus(result, onSyncStatusChange);
+    })();
+  }, [cloudReady, entries, onSyncStatusChange]);
 
   const isToday = viewDate === todayKey();
   const entry = entries[viewDate];
@@ -236,6 +253,40 @@ export default function PushUps() {
       )}
     </>
   );
+}
+
+function applyLoadStatus(result: CloudLoadResult, onSyncStatusChange: OnCloudSyncStatusChange) {
+  switch (result.kind) {
+    case 'success':
+      onSyncStatusChange({ kind: 'load_success' });
+      return;
+    case 'auth_error':
+      onSyncStatusChange({ kind: 'auth_error' });
+      return;
+    case 'error':
+      onSyncStatusChange({ kind: 'error' });
+      return;
+    case 'disabled':
+      onSyncStatusChange({ kind: 'idle' });
+      return;
+  }
+}
+
+function applySaveStatus(result: CloudSaveResult, onSyncStatusChange: OnCloudSyncStatusChange) {
+  switch (result.kind) {
+    case 'success':
+      onSyncStatusChange({ kind: 'save_success' });
+      return;
+    case 'auth_error':
+      onSyncStatusChange({ kind: 'auth_error' });
+      return;
+    case 'error':
+      onSyncStatusChange({ kind: 'error' });
+      return;
+    case 'disabled':
+      onSyncStatusChange({ kind: 'idle' });
+      return;
+  }
 }
 
 function rangeLabel(r: TrendRange): string {

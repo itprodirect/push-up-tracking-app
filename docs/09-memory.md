@@ -44,6 +44,7 @@ Durable constraints, patterns, and assumptions that any agent working in this re
 ## Patterns to Preserve
 
 - Exercise catalog is the single source of truth for canonical names, aliases, and categories (`src/exerciseCatalog.ts`).
+- App shell (`src/App.tsx`) owns the compact shared cloud sync indicator; feature screens report load/save state into it instead of inventing per-screen sync banners.
 - Storage module (`src/storage.ts`) owns localStorage reads and writes plus backward-compatible loading.
 - Cloud persistence client (`src/cloudPersistence.ts`) owns remote load/save calls and rollout merge behavior.
 - Serverless persistence boundary (`api/persistence.js`) owns the Supabase translation layer.
