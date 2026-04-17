@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import Root from './Root';
@@ -76,6 +76,22 @@ describe('Root auth gate', () => {
     });
 
     render(<Root />);
+
+    expect(await screen.findByText(/existing app shell/i)).toBeInTheDocument();
+    expect(screen.getByText(/approved@example.com/i)).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /sign in/i })).not.toBeInTheDocument();
+  });
+
+  it('mounts the app shell when auth state later restores a session', async () => {
+    render(<Root />);
+
+    await screen.findByRole('heading', { name: /sign in/i });
+
+    await act(async () => {
+      authListener?.('SIGNED_IN', {
+        user: { email: 'approved@example.com' },
+      });
+    });
 
     expect(await screen.findByText(/existing app shell/i)).toBeInTheDocument();
     expect(screen.getByText(/approved@example.com/i)).toBeInTheDocument();

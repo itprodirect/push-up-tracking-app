@@ -1,7 +1,27 @@
-import { describe, expect, it } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { todayKey } from './dates';
 import Workouts from './Workouts';
+
+const { loadPersistenceSnapshot, saveWorkoutDays } = vi.hoisted(() => ({
+  loadPersistenceSnapshot: vi.fn(),
+  saveWorkoutDays: vi.fn(),
+}));
+
+vi.mock('./cloudPersistence', () => ({
+  CLOUD_PERSISTENCE_ENABLED: true,
+  loadPersistenceSnapshot,
+  mergeWorkoutsWithLocalFallback: (remote: unknown, local: unknown) => ({ ...(remote as object), ...(local as object) }),
+  saveWorkoutDays,
+}));
+
+beforeEach(() => {
+  loadPersistenceSnapshot.mockReset();
+  saveWorkoutDays.mockReset();
+  loadPersistenceSnapshot.mockImplementation(() => new Promise(() => {}));
+  saveWorkoutDays.mockResolvedValue(undefined);
+});
 
 // A number like "1,000" can legitimately appear many times on the screen
 // (day total card, exercise card, workout log day row, log exercise row,
@@ -214,5 +234,70 @@ describe('Workouts screen', () => {
     expect(getTodayTotalText(container)).toBe('0');
     expect(screen.queryByText('Curl')).not.toBeInTheDocument();
     expect(screen.getByText(/no workouts logged in this range yet/i)).toBeInTheDocument();
+  });
+
+  it('loads a persisted cloud workout on mount', async () => {
+    const day = todayKey();
+    loadPersistenceSnapshot.mockResolvedValue({
+      entries: {},
+      workouts: {
+        [day]: {
+          date: day,
+          exercises: [
+            {
+              id: 'cloud-ex-1',
+              name: 'Bench Press',
+              category: 'Chest / Push',
+              sets: [{ weight: 100, reps: 10 }],
+            },
+          ],
+        },
+      },
+    });
+
+    const { container } = render(<Workouts />);
+
+    expect((await screen.findAllByText('Bench Press')).length).toBeGreaterThanOrEqual(1);
+    expect(getTodayTotalText(container)).toBe('1,000');
+  });
+
+  it('saves a new workout day through cloud persistence', async () => {
+    const user = userEvent.setup();
+    const day = todayKey();
+    loadPersistenceSnapshot.mockResolvedValue({
+      entries: {},
+      workouts: {},
+    });
+
+    render(<Workouts />);
+
+    await waitFor(() => {
+      expect(loadPersistenceSnapshot).toHaveBeenCalledTimes(1);
+    });
+
+    await user.type(screen.getByPlaceholderText(/hammer pullover pull/i), 'Bench Press');
+    await user.click(screen.getByRole('button', { name: /add exercise/i }));
+
+    const card = getTodayExerciseCard();
+    await user.type(within(card).getByPlaceholderText('weight'), '100');
+    await user.type(within(card).getByPlaceholderText('reps'), '10');
+    await user.click(within(card).getByRole('button', { name: /^add$/i }));
+
+    await waitFor(() => {
+      expect(saveWorkoutDays).toHaveBeenCalledWith(
+        day,
+        expect.objectContaining({
+          date: day,
+          exercises: [
+            expect.objectContaining({
+              id: expect.any(String),
+              name: 'Bench Press',
+              category: 'Chest / Push',
+              sets: [{ weight: 100, reps: 10 }],
+            }),
+          ],
+        }),
+      );
+    });
   });
 });
