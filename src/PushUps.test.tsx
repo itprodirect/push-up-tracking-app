@@ -1,7 +1,27 @@
-import { describe, expect, it } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { todayKey } from './dates';
 import PushUps from './PushUps';
+
+const { loadPersistenceSnapshot, savePushupEntries } = vi.hoisted(() => ({
+  loadPersistenceSnapshot: vi.fn(),
+  savePushupEntries: vi.fn(),
+}));
+
+vi.mock('./cloudPersistence', () => ({
+  CLOUD_PERSISTENCE_ENABLED: true,
+  loadPersistenceSnapshot,
+  mergeEntriesWithLocalFallback: (remote: unknown, local: unknown) => ({ ...(remote as object), ...(local as object) }),
+  savePushupEntries,
+}));
+
+beforeEach(() => {
+  loadPersistenceSnapshot.mockReset();
+  savePushupEntries.mockReset();
+  loadPersistenceSnapshot.mockImplementation(() => new Promise(() => {}));
+  savePushupEntries.mockResolvedValue(undefined);
+});
 
 describe('PushUps screen', () => {
   it('renders with 0 today when storage is empty', () => {
@@ -73,6 +93,44 @@ describe('PushUps screen', () => {
     unmount();
     render(<PushUps />);
     expect(screen.getByText(/10 \/ 50/)).toBeInTheDocument();
+  });
+
+  it('loads a persisted cloud push-up entry on mount', async () => {
+    const day = todayKey();
+    loadPersistenceSnapshot.mockResolvedValue({
+      entries: {
+        [day]: { date: day, sets: [10] },
+      },
+      workouts: {},
+    });
+
+    render(<PushUps />);
+
+    expect(await screen.findByText(/10 \/ 50/)).toBeInTheDocument();
+  });
+
+  it('saves a new push-up entry through cloud persistence', async () => {
+    const user = userEvent.setup();
+    const day = todayKey();
+    loadPersistenceSnapshot.mockResolvedValue({
+      entries: {},
+      workouts: {},
+    });
+
+    render(<PushUps />);
+
+    await waitFor(() => {
+      expect(loadPersistenceSnapshot).toHaveBeenCalledTimes(1);
+    });
+
+    await user.click(screen.getByRole('button', { name: '+10' }));
+
+    await waitFor(() => {
+      expect(savePushupEntries).toHaveBeenCalledWith(day, {
+        date: day,
+        sets: [10],
+      });
+    });
   });
 });
 
