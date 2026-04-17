@@ -37,14 +37,15 @@ _Last updated: April 2026_
 - **localStorage fallback is still part of the rollout.** Cloud saves are not yet the only active persistence path.
 - **Some state is still local-only.** `app.tab` and push-up goal settings are not cloud-backed today.
 - **Cloud sync UX is still intentionally small.** The app now surfaces compact load/save/failure state, but it still does not attempt richer retry flows or conflict-resolution UX.
-- **Legacy solo cloud data is not auto-migrated.** Existing rows that were previously stored under `owner_key = 'solo'` require the separate admin backfill runbook if they still need to move to a real user id.
+- **Legacy solo cloud data is not auto-migrated.** Existing rows that were previously stored under `owner_key = 'solo'` still require the separate admin backfill runbook if they need to move to a real user id.
+- **Legacy solo backfill is still not applied in production.** Read-only production validation verified the target auth user, confirmed no `pushup_days` or `workout_days` conflicts, and found that `user_settings` requires a conservative merge path. The repo-side dry-run/apply SQL and runbook were updated for that case, but the revised production dry-run still needs to be rerun before any manual apply is considered.
 - **SMTP/custom email provider setup is not done.** Auth still uses the minimal current Supabase email path.
 - **Auth hardening is not done.** Broader SMTP, rate-limit, and production polish work was intentionally deferred from auth v0.
 - **No exports or backups.** No file-level export or backup path is live yet.
 
 ## Current Phase
 
-**Solo alpha / dogfooding with auth-gated UI, auth-protected persistence, and authenticated-user cloud ownership live.** The next likely slice is SMTP/custom email provider setup plus auth hardening for broader beta readiness.
+**Solo alpha / dogfooding with auth-gated UI, auth-protected persistence, and authenticated-user cloud ownership live.** The immediate operational next step is rerunning the revised legacy `solo` backfill dry-run in production from the checked-in SQL, then reviewing the new `user_settings` merge checks before any manual apply decision. SMTP/custom email provider setup plus auth hardening remain the next broader product-facing slice.
 
 ## Key Files
 
