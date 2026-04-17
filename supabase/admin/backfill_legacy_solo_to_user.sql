@@ -2,6 +2,8 @@
 -- Do not run automatically.
 -- Replace __TARGET_USER_ID__ before any real execution.
 -- Run only after the dry-run script reports apply_ready = true.
+-- For the current production issue #39 lane, verify the target auth.users.id is:
+-- 4666c980-df61-4285-8007-0c065ab32e70
 
 begin;
 
@@ -21,10 +23,6 @@ begin
   into v_target_owner_key
   from backfill_params;
 
-  if v_target_owner_key = '__TARGET_USER_ID__' then
-    raise exception 'Replace __TARGET_USER_ID__ before running this script.';
-  end if;
-
   if btrim(v_target_owner_key) = '' then
     raise exception 'Target owner key must not be empty.';
   end if;
@@ -37,7 +35,7 @@ begin
     perform v_target_owner_key::uuid;
   exception
     when invalid_text_representation then
-      raise exception 'Target owner key must be a valid auth.users uuid.';
+      raise exception 'Replace __TARGET_USER_ID__ with a valid auth.users uuid before running this script.';
   end;
 
   if not exists (
@@ -50,14 +48,173 @@ begin
 end $$;
 
 create temporary table source_user_settings on commit drop as
-select owner_key, created_at, updated_at
-from public.user_settings
-where owner_key = (select source_owner_key from backfill_params);
+select
+  us.owner_key,
+  us.created_at,
+  us.updated_at,
+  us.pushup_settings,
+  coalesce(jsonb_typeof(us.pushup_settings), 'null') as pushup_settings_type,
+  case
+    when us.pushup_settings is null then 'missing'
+    when jsonb_typeof(us.pushup_settings) <> 'object' then jsonb_typeof(us.pushup_settings)
+    when not (us.pushup_settings ? 'entries') then 'missing'
+    else coalesce(jsonb_typeof(us.pushup_settings -> 'entries'), 'null')
+  end as entries_type,
+  case
+    when us.pushup_settings is null then true
+    when jsonb_typeof(us.pushup_settings) = 'object' then true
+    else false
+  end as pushup_settings_is_object,
+  case
+    when us.pushup_settings is null then true
+    when jsonb_typeof(us.pushup_settings) <> 'object' then false
+    when not (us.pushup_settings ? 'entries') then true
+    when coalesce(jsonb_typeof(us.pushup_settings -> 'entries'), 'null') = 'null' then true
+    when jsonb_typeof(us.pushup_settings -> 'entries') = 'object' then true
+    else false
+  end as entries_is_object,
+  case
+    when us.pushup_settings is null then '{}'::jsonb
+    when jsonb_typeof(us.pushup_settings) <> 'object' then '{}'::jsonb
+    when not (us.pushup_settings ? 'entries') then '{}'::jsonb
+    when coalesce(jsonb_typeof(us.pushup_settings -> 'entries'), 'null') = 'null' then '{}'::jsonb
+    when jsonb_typeof(us.pushup_settings -> 'entries') <> 'object' then '{}'::jsonb
+    else us.pushup_settings -> 'entries'
+  end as entries_json
+from public.user_settings us
+where us.owner_key = (select source_owner_key from backfill_params);
 
 create temporary table target_user_settings on commit drop as
-select owner_key, created_at, updated_at
-from public.user_settings
-where owner_key = (select target_owner_key from backfill_params);
+select
+  us.owner_key,
+  us.created_at,
+  us.updated_at,
+  us.pushup_settings,
+  coalesce(jsonb_typeof(us.pushup_settings), 'null') as pushup_settings_type,
+  case
+    when us.pushup_settings is null then 'missing'
+    when jsonb_typeof(us.pushup_settings) <> 'object' then jsonb_typeof(us.pushup_settings)
+    when not (us.pushup_settings ? 'entries') then 'missing'
+    else coalesce(jsonb_typeof(us.pushup_settings -> 'entries'), 'null')
+  end as entries_type,
+  case
+    when us.pushup_settings is null then true
+    when jsonb_typeof(us.pushup_settings) = 'object' then true
+    else false
+  end as pushup_settings_is_object,
+  case
+    when us.pushup_settings is null then true
+    when jsonb_typeof(us.pushup_settings) <> 'object' then false
+    when not (us.pushup_settings ? 'entries') then true
+    when coalesce(jsonb_typeof(us.pushup_settings -> 'entries'), 'null') = 'null' then true
+    when jsonb_typeof(us.pushup_settings -> 'entries') = 'object' then true
+    else false
+  end as entries_is_object,
+  case
+    when us.pushup_settings is null then '{}'::jsonb
+    when jsonb_typeof(us.pushup_settings) <> 'object' then '{}'::jsonb
+    when not (us.pushup_settings ? 'entries') then '{}'::jsonb
+    when coalesce(jsonb_typeof(us.pushup_settings -> 'entries'), 'null') = 'null' then '{}'::jsonb
+    when jsonb_typeof(us.pushup_settings -> 'entries') <> 'object' then '{}'::jsonb
+    else us.pushup_settings -> 'entries'
+  end as entries_json
+from public.user_settings us
+where us.owner_key = (select target_owner_key from backfill_params);
+
+create temporary table user_settings_invalid_shape_rows on commit drop as
+select
+  owner_scope,
+  owner_key,
+  pushup_settings_type,
+  entries_type
+from (
+  select
+    'source' as owner_scope,
+    owner_key,
+    pushup_settings_type,
+    entries_type,
+    pushup_settings_is_object,
+    entries_is_object
+  from source_user_settings
+
+  union all
+
+  select
+    'target' as owner_scope,
+    owner_key,
+    pushup_settings_type,
+    entries_type,
+    pushup_settings_is_object,
+    entries_is_object
+  from target_user_settings
+) shapes
+where not pushup_settings_is_object
+   or not entries_is_object;
+
+create temporary table user_settings_unexpected_top_level_keys on commit drop as
+select
+  'source' as owner_scope,
+  s.owner_key,
+  k.key as top_level_key
+from source_user_settings s
+cross join lateral jsonb_object_keys(
+  case
+    when s.pushup_settings_type = 'object' then coalesce(s.pushup_settings, '{}'::jsonb) - 'entries'
+    else '{}'::jsonb
+  end
+) as k(key)
+
+union all
+
+select
+  'target' as owner_scope,
+  t.owner_key,
+  k.key as top_level_key
+from target_user_settings t
+cross join lateral jsonb_object_keys(
+  case
+    when t.pushup_settings_type = 'object' then coalesce(t.pushup_settings, '{}'::jsonb) - 'entries'
+    else '{}'::jsonb
+  end
+) as k(key);
+
+create temporary table source_user_settings_entry_days on commit drop as
+select
+  s.owner_key,
+  d.entry_day
+from source_user_settings s
+cross join lateral jsonb_object_keys(s.entries_json) as d(entry_day);
+
+create temporary table target_user_settings_entry_days on commit drop as
+select
+  t.owner_key,
+  d.entry_day
+from target_user_settings t
+cross join lateral jsonb_object_keys(t.entries_json) as d(entry_day);
+
+create temporary table user_settings_entry_overlap on commit drop as
+select
+  s.entry_day
+from source_user_settings_entry_days s
+join target_user_settings_entry_days t
+  on t.entry_day = s.entry_day
+order by s.entry_day;
+
+create temporary table merged_user_settings on commit drop as
+select
+  t.owner_key as target_owner_key,
+  t.created_at as target_created_at,
+  greatest(t.updated_at, s.updated_at, now()) as merged_updated_at,
+  jsonb_build_object(
+    'entries',
+    t.entries_json || s.entries_json
+  ) as merged_pushup_settings,
+  (
+    select count(*)
+    from jsonb_object_keys(t.entries_json || s.entries_json)
+  ) as merged_entry_day_count
+from source_user_settings s
+cross join target_user_settings t;
 
 create temporary table source_pushup_days on commit drop as
 select day, reps, created_at, updated_at
@@ -117,9 +274,24 @@ begin
     raise exception 'No owner-scoped solo rows were found to backfill.';
   end if;
 
-  if (select count(*) from source_user_settings) > 0
-    and (select count(*) from target_user_settings) > 0 then
-    raise exception 'Target owner already has user_settings. Resolve that manually before backfill.';
+  if (select count(*) from source_user_settings) <> 1 then
+    raise exception 'Expected exactly 1 solo user_settings row, found %.', (select count(*) from source_user_settings);
+  end if;
+
+  if (select count(*) from target_user_settings) <> 1 then
+    raise exception 'Expected exactly 1 target user_settings row, found %.', (select count(*) from target_user_settings);
+  end if;
+
+  if (select count(*) from user_settings_invalid_shape_rows) > 0 then
+    raise exception 'user_settings shape is not limited to null/object pushup_settings with null/missing/object entries.';
+  end if;
+
+  if (select count(*) from user_settings_unexpected_top_level_keys) > 0 then
+    raise exception 'Unexpected top-level pushup_settings keys exist outside entries. Abort conservatively.';
+  end if;
+
+  if (select count(*) from user_settings_entry_overlap) > 0 then
+    raise exception 'Source and target user_settings.entries overlap on one or more entry-date keys.';
   end if;
 
   if (select count(*) from pushup_day_conflicts) > 0 then
@@ -131,15 +303,26 @@ begin
   end if;
 end $$;
 
-create temporary table moved_user_settings on commit drop as
+create temporary table updated_target_user_settings on commit drop as
 with updated as (
   update public.user_settings u
-  set owner_key = p.target_owner_key
-  from backfill_params p
+  set
+    pushup_settings = m.merged_pushup_settings,
+    updated_at = m.merged_updated_at
+  from merged_user_settings m
+  where u.owner_key = m.target_owner_key
+  returning u.owner_key, u.created_at, u.updated_at, u.pushup_settings
+)
+select * from updated;
+
+create temporary table deleted_source_user_settings on commit drop as
+with deleted as (
+  delete from public.user_settings u
+  using backfill_params p
   where u.owner_key = p.source_owner_key
   returning u.owner_key, u.created_at, u.updated_at
 )
-select * from updated;
+select * from deleted;
 
 create temporary table moved_pushup_days on commit drop as
 with updated as (
@@ -171,10 +354,43 @@ left join public.workout_exercises we
 left join public.workout_sets ws
   on ws.workout_exercise_id = we.id;
 
+create temporary table target_user_settings_entry_days_after_apply on commit drop as
+select
+  u.owner_key,
+  d.entry_day
+from public.user_settings u
+cross join lateral jsonb_object_keys(
+  case
+    when u.pushup_settings is null then '{}'::jsonb
+    when jsonb_typeof(u.pushup_settings) <> 'object' then '{}'::jsonb
+    when not (u.pushup_settings ? 'entries') then '{}'::jsonb
+    when jsonb_typeof(u.pushup_settings -> 'entries') <> 'object' then '{}'::jsonb
+    else u.pushup_settings -> 'entries'
+  end
+) as d(entry_day)
+where u.owner_key = (select target_owner_key from backfill_params);
+
 do $$
 begin
   if (select count(*) from public.user_settings where owner_key = (select source_owner_key from backfill_params)) <> 0 then
-    raise exception 'Source owner still has user_settings rows after update.';
+    raise exception 'Source owner still has user_settings rows after merge/delete.';
+  end if;
+
+  if (select count(*) from public.user_settings where owner_key = (select target_owner_key from backfill_params)) <> 1 then
+    raise exception 'Target owner does not have exactly one user_settings row after merge.';
+  end if;
+
+  if (select count(*) from updated_target_user_settings) <> 1 then
+    raise exception 'Expected exactly one target user_settings row to be updated.';
+  end if;
+
+  if (select count(*) from deleted_source_user_settings) <> 1 then
+    raise exception 'Expected exactly one solo user_settings row to be deleted after merge.';
+  end if;
+
+  if (select count(*) from target_user_settings_entry_days_after_apply)
+    <> (select merged_entry_day_count from merged_user_settings) then
+    raise exception 'Merged target user_settings entry-day count did not match expectation.';
   end if;
 
   if (select count(*) from public.pushup_days where owner_key = (select source_owner_key from backfill_params)) <> 0 then
@@ -183,10 +399,6 @@ begin
 
   if (select count(*) from public.workout_days where owner_key = (select source_owner_key from backfill_params)) <> 0 then
     raise exception 'Source owner still has workout_days rows after update.';
-  end if;
-
-  if (select count(*) from moved_user_settings) <> (select count(*) from source_user_settings) then
-    raise exception 'Moved user_settings count did not match source count.';
   end if;
 
   if (select count(*) from moved_pushup_days) <> (select count(*) from source_pushup_days) then
@@ -211,7 +423,7 @@ end $$;
 select
   p.target_owner_key as target_owner_key,
   u.email as target_user_email,
-  (select count(*) from moved_user_settings) as moved_user_settings_count,
+  (select merged_entry_day_count from merged_user_settings) as merged_user_settings_entry_day_count,
   (select count(*) from moved_pushup_days) as moved_pushup_day_count,
   (select count(*) from moved_workout_days) as moved_workout_day_count,
   coalesce((select workout_exercise_count from moved_workout_descendant_totals), 0) as validated_workout_exercise_count,
@@ -265,6 +477,12 @@ select
 from public.workout_days
 where owner_key = (select target_owner_key from backfill_params)
 order by table_name;
+
+select
+  owner_key,
+  entry_day
+from target_user_settings_entry_days_after_apply
+order by entry_day;
 
 select
   wd.id as moved_workout_day_id,
