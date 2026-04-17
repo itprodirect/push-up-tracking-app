@@ -4,6 +4,15 @@ Lightweight record of important product and architecture decisions.
 
 ---
 
+### 2026-04 - Legacy `solo` `user_settings` backfill must use conservative merge validation
+
+**Context:** Read-only production validation of the legacy `solo` backfill lane found no `pushup_days` or `workout_days` collisions for the verified target user, but it did find that both the target and `solo` `user_settings` rows already exist with disjoint `pushup_settings.entries` day keys. The older repo-side SQL also had dry-run defects around placeholder validation, JSON key counting, and one conflict result-set shape.
+**Decision:** Update the backfill runbook and admin SQL so the dry-run uses session-local temp objects only, validates `user_settings` shape, flags unexpected top-level keys, checks entry-day overlap explicitly, and treats `user_settings` as a conservative merge-then-remove-source path instead of a naive owner-key reassignment.
+**Why:** `user_settings` is no longer safe to treat like a simple parent-row owner swap when a target row already exists. The safest operational path is to abort on ambiguity and only allow a merge when the known `entries` shape is clean and source/target day keys are disjoint.
+**Impact:** The next session should rerun the revised checked-in dry-run SQL manually in production and inspect the new summary fields before any apply path is considered. No production mutation was performed during this validation/fix session.
+
+---
+
 ### 2026-04 - Supabase Auth v0 closes public UI access
 
 **Context:** The app needed a minimal real auth path before continuing beyond a trusted public UI. Supabase was already the live persistence backend, so the smallest integrated auth path mattered more than broad auth feature depth.

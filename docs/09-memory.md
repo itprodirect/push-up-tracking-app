@@ -22,8 +22,8 @@ Durable constraints, patterns, and assumptions that any agent working in this re
 - The browser must never call Supabase data tables directly. All cloud persistence goes through `/api/persistence`.
 - Supabase credentials live in Vercel environment variables, never in client code.
 - `/api/persistence` requires a valid Supabase bearer token.
-- The current owner model is hard-coded to `owner_key = 'solo'`.
-- Persisted data is not yet partitioned per authenticated user.
+- The live owner model is the authenticated Supabase user id stored in `owner_key`.
+- Legacy rows may still exist under `owner_key = 'solo'`, but that is now a manual operational backfill concern rather than the live runtime model.
 - Current same-day merge behavior favors local data over remote data when both exist.
 
 ## Development Constraints
@@ -33,12 +33,14 @@ Durable constraints, patterns, and assumptions that any agent working in this re
 - Don't introduce new architectural patterns that are not documented in `02-architecture.md`.
 - Don't assume user-scoped persistence, SMTP/custom email-provider setup, or localStorage fallback removal exist beyond what `01-current-state.md` documents.
 - Normalization happens at save and read boundaries, not through batch storage migrations.
+- The legacy `solo` backfill remains manual/admin-only. No agent should run a production apply path without an explicitly clean rerun of the revised checked-in dry-run SQL.
+- The currently verified production backfill target is `4666c980-df61-4285-8007-0c065ab32e70` (`nick@itprodirect.com`), but that target should still be re-verified with a fresh read-only `auth.users` query before any future manual production action.
 
 ## Rollout Rules
 
 - Dogfood first. Every feature gets real use by the builder before reaching anyone else.
 - Beta users are added one at a time, deliberately.
-- No external beta without replacing `owner_key = 'solo'` with user-scoped persistence.
+- No external beta without authenticated-user-scoped persistence in place.
 - Keep the user count low until persistence, error handling, and backups are solid.
 
 ## Patterns to Preserve

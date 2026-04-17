@@ -4,12 +4,13 @@ This backlog tracks the next practical follow-up after the merged Supabase v1 pe
 
 ## P0 Immediate Next Work
 
-1. Add SMTP/custom email provider setup and auth rate-limit hardening
+1. Re-run the revised legacy `solo` backfill dry-run in production and review the new `user_settings` merge checks before any manual apply decision
+2. Add SMTP/custom email provider setup and auth rate-limit hardening
 
 ## P1 Near-Term Follow-Up
 
-2. [#16 Add historical workout views and aggregation validation against cloud data](https://github.com/itprodirect/push-up-tracking-app/issues/16)
-3. [#15 Add data export and backup flow](https://github.com/itprodirect/push-up-tracking-app/issues/15)
+3. [#16 Add historical workout views and aggregation validation against cloud data](https://github.com/itprodirect/push-up-tracking-app/issues/16)
+4. [#15 Add data export and backup flow](https://github.com/itprodirect/push-up-tracking-app/issues/15)
 
 ## P2 Later Or Optional
 
@@ -27,6 +28,8 @@ This backlog tracks the next practical follow-up after the merged Supabase v1 pe
 - Revisit same-day local-over-remote conflict behavior before broader rollout.
 - Authenticated-user cloud ownership is now the live persistence model.
 - Legacy cloud rows that still exist under `owner_key = 'solo'` require a separate manual admin backfill if they need to move.
+- Read-only production validation already confirmed the target auth user id `4666c980-df61-4285-8007-0c065ab32e70`, found no `pushup_days` or `workout_days` conflicts, and showed that `user_settings` needs the revised conservative merge path now documented in the checked-in SQL/runbook.
+- The next session should use the revised checked-in dry-run SQL exactly as committed, run it manually in the production SQL editor, inspect the updated summary fields, and only consider apply if that revised dry-run returns fully clean.
 - SMTP/custom email provider work and auth hardening remain the next intentionally deferred follow-up work.
 
 ## Issue Template Standard
