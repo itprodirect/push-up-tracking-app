@@ -4,6 +4,15 @@ Lightweight record of important product and architecture decisions.
 
 ---
 
+### 2026-04 - Decorative imagery stays subtle, branded, and reusable
+
+**Context:** The app needed a first visual polish pass after the core auth and persistence foundation shipped, without making the logging workflows feel noisy or distracting.
+**Decision:** Use generated decorative imagery as subtle support: reusable `PageHero` banners on Push-Ups and Workouts, a low-opacity analytics accent on trend cards, and a workout empty-state illustration. Keep the assets under `public/images/app` and track nested PNGs with a narrow `.gitignore` exception.
+**Why:** Low-distraction imagery makes the app feel more finished while preserving readability and fast daily logging. A shared `PageHero` avoids duplicating page-specific banner code.
+**Impact:** The decorative image lane is complete and live. Future work should be limited to small crop, opacity, or spacing refinements if dogfooding shows a real visual issue.
+
+---
+
 ### 2026-04 - Legacy `solo` `user_settings` backfill must use conservative merge validation
 
 **Context:** Read-only production validation of the legacy `solo` backfill lane found no `pushup_days` or `workout_days` collisions for the verified target user, but it did find that both the target and `solo` `user_settings` rows already exist with disjoint `pushup_settings.entries` day keys. The older repo-side SQL also had dry-run defects around placeholder validation, JSON key counting, and one conflict result-set shape.

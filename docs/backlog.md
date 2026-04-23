@@ -17,6 +17,7 @@ This backlog tracks the next practical follow-up after the merged Supabase v1 pe
 5. [#19 Evaluate attachments/media support backed by cloud storage](https://github.com/itprodirect/push-up-tracking-app/issues/19)
 6. [#20 Evaluate AI-assisted workout or notes workflows using stored cloud data](https://github.com/itprodirect/push-up-tracking-app/issues/20)
 7. [#21 Evaluate richer user/account management beyond limited beta access](https://github.com/itprodirect/push-up-tracking-app/issues/21)
+- Optional visual polish only if dogfooding reveals a real issue: tiny crop, opacity, or spacing refinements for the new hero, analytics, or empty-state imagery.
 
 ## Sequencing Notes
 
@@ -27,6 +28,7 @@ This backlog tracks the next practical follow-up after the merged Supabase v1 pe
 - Keep localStorage fallback until removal is planned and validated explicitly.
 - Revisit same-day local-over-remote conflict behavior before broader rollout.
 - Authenticated-user cloud ownership is now the live persistence model.
+- Decorative app imagery is live and the first visual polish lane is complete; avoid inventing more visual work unless usage shows a concrete tweak is needed.
 - Legacy cloud rows that still exist under `owner_key = 'solo'` require a separate manual admin backfill if they need to move.
 - Read-only production validation already confirmed the target auth user id `4666c980-df61-4285-8007-0c065ab32e70`, found no `pushup_days` or `workout_days` conflicts, and showed that `user_settings` needs the revised conservative merge path now documented in the checked-in SQL/runbook.
 - The next session should use the revised checked-in dry-run SQL exactly as committed, run it manually in the production SQL editor, inspect the updated summary fields, and only consider apply if that revised dry-run returns fully clean.

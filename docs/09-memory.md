@@ -15,6 +15,8 @@ Durable constraints, patterns, and assumptions that any agent working in this re
 - Legacy stored data (old category labels, unnormalized exercise names) is handled at read and display boundaries.
 - Tests use Vitest with React Testing Library. Run with `npm test`.
 - Build with `npm run build` (includes TypeScript compilation).
+- Decorative app imagery lives under `public/images/app/`, including heroes, analytics backgrounds, and empty-state illustrations.
+- `src/PageHero.tsx` is the reusable page banner component for branded hero imagery.
 
 ## Architecture Constraints
 
@@ -31,6 +33,7 @@ Durable constraints, patterns, and assumptions that any agent working in this re
 - Keep changes scoped to the issue being worked. Don't combine unrelated changes.
 - Don't add dependencies without explicit approval.
 - Don't introduce new architectural patterns that are not documented in `02-architecture.md`.
+- Keep the narrow `.gitignore` exception for `public/images/app/**/*.png`; nested app PNG assets need to be tracked for deploys.
 - Don't assume user-scoped persistence, SMTP/custom email-provider setup, or localStorage fallback removal exist beyond what `01-current-state.md` documents.
 - Normalization happens at save and read boundaries, not through batch storage migrations.
 - The legacy `solo` backfill remains manual/admin-only. No agent should run a production apply path without an explicitly clean rerun of the revised checked-in dry-run SQL.
@@ -51,3 +54,4 @@ Durable constraints, patterns, and assumptions that any agent working in this re
 - Cloud persistence client (`src/cloudPersistence.ts`) owns remote load/save calls and rollout merge behavior.
 - Serverless persistence boundary (`api/persistence.js`) owns the Supabase translation layer.
 - `app.tab` remains local-only until explicitly changed.
+- Decorative imagery should stay low-distraction and supportive. Prefer shared components and small CSS accents over page-specific visual forks.

@@ -4,7 +4,7 @@ _Last updated: April 2026_
 
 ## Current Phase
 
-Solo alpha with auth-gated UI and auth-protected Supabase persistence live in production.
+Solo alpha with auth-gated UI, auth-protected Supabase persistence, and the first decorative visual polish pass live in production.
 
 ## Top Priorities
 
@@ -20,6 +20,13 @@ Solo alpha with auth-gated UI and auth-protected Supabase persistence live in pr
 - Supabase-backed save and load through `/api/persistence` with local fallback still enabled
 - Compact sync status for cloud load, save progress, save success, and cloud-sync failures
 - Auth-protected persistence API with authenticated-user-scoped cloud ownership live
+- Subtle generated imagery on the Push-Ups and Workouts heroes, workout empty state, and trend-card analytics accents
+
+## Recent Session Summary
+
+- Shipped the first generated-imagery visual polish pass: `PageHero`, page banners, workout empty-state illustration, and low-opacity trend-card accents.
+- Added the narrow nested-PNG `.gitignore` exception needed for `public/images/app/...` assets to deploy correctly.
+- Validation passed with the full test suite, production build, and live visual review after merge.
 
 ## Blocked
 
