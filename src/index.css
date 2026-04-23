@@ -195,7 +195,7 @@ button {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
   gap: 12px;
 }
 
@@ -237,7 +237,7 @@ button {
     ),
     var(--page-hero-image);
   background-size: cover;
-  background-position: center;
+  background-position: 50% 40%;
   background-repeat: no-repeat;
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.25);
 }
