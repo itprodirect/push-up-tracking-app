@@ -11,7 +11,7 @@ _Last updated: April 2026_
 - **Rollout fallback:** Browser `localStorage` remains active for local-first loading and cloud fallback during rollout.
 - **Local-only state:** `app.tab` remains browser-local. Push-up daily goal still loads and saves locally.
 - **Deployment:** Standard Vercel web app build. Not a PWA.
-- **Visual polish:** Decorative app imagery is live from `public/images/app`, with reusable page heroes and subtle analytics/empty-state accents.
+- **Visual polish:** Decorative app imagery is live from `public/images/app`, with reusable page heroes, subtle analytics/empty-state accents, and two small follow-up CSS polish passes that tuned hero sizing, focal positioning, and header-to-hero spacing for narrow/mobile layouts.
 
 ## What Works Today
 
@@ -49,7 +49,7 @@ _Last updated: April 2026_
 
 ## Current Phase
 
-**Solo alpha / dogfooding with auth-gated UI, auth-protected persistence, authenticated-user cloud ownership, and the first visual polish pass live.** The immediate operational next step is rerunning the revised legacy `solo` backfill dry-run in production from the checked-in SQL, then reviewing the new `user_settings` merge checks before any manual apply decision. SMTP/custom email provider setup plus auth hardening remain the next broader product-facing slice.
+**Solo alpha / dogfooding with auth-gated UI, auth-protected persistence, authenticated-user cloud ownership, and the decorative imagery lane (integration plus follow-up polish) live.** The immediate operational next step is rerunning the revised legacy `solo` backfill dry-run in production from the checked-in SQL, then reviewing the new `user_settings` merge checks before any manual apply decision. SMTP/custom email provider setup plus auth hardening remain the next broader product-facing slice.
 
 ## Key Files
 
