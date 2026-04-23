@@ -11,6 +11,7 @@ _Last updated: April 2026_
 - **Rollout fallback:** Browser `localStorage` remains active for local-first loading and cloud fallback during rollout.
 - **Local-only state:** `app.tab` remains browser-local. Push-up daily goal still loads and saves locally.
 - **Deployment:** Standard Vercel web app build. Not a PWA.
+- **Visual polish:** Decorative app imagery is live from `public/images/app`, with reusable page heroes and subtle analytics/empty-state accents.
 
 ## What Works Today
 
@@ -30,6 +31,9 @@ _Last updated: April 2026_
 - Supabase v1 schema exists for `user_settings`, `pushup_days`, `workout_days`, `workout_exercises`, and `workout_sets`.
 - Day-scoped persistence behavior is in place at the API boundary for the current rollout path.
 - Legacy category labels (`push`, `pull`, `legs`) load correctly into current labels.
+- Push-Ups and Workouts both show subtle branded hero imagery via `PageHero`.
+- Workout empty state now includes the generated empty-state illustration.
+- Push-up and workout trend cards include a low-opacity analytics background accent.
 
 ## What Is Limited or Intentionally Incomplete
 
@@ -45,7 +49,7 @@ _Last updated: April 2026_
 
 ## Current Phase
 
-**Solo alpha / dogfooding with auth-gated UI, auth-protected persistence, and authenticated-user cloud ownership live.** The immediate operational next step is rerunning the revised legacy `solo` backfill dry-run in production from the checked-in SQL, then reviewing the new `user_settings` merge checks before any manual apply decision. SMTP/custom email provider setup plus auth hardening remain the next broader product-facing slice.
+**Solo alpha / dogfooding with auth-gated UI, auth-protected persistence, authenticated-user cloud ownership, and the first visual polish pass live.** The immediate operational next step is rerunning the revised legacy `solo` backfill dry-run in production from the checked-in SQL, then reviewing the new `user_settings` merge checks before any manual apply decision. SMTP/custom email provider setup plus auth hardening remain the next broader product-facing slice.
 
 ## Key Files
 
@@ -53,6 +57,8 @@ _Last updated: April 2026_
 |------|-------|
 | Push-up logging | `src/PushUps.tsx` |
 | Workout logging | `src/Workouts.tsx` |
+| Page hero imagery | `src/PageHero.tsx`, `public/images/app/heroes/` |
+| Decorative app assets | `public/images/app/` |
 | Exercise catalog | `src/exerciseCatalog.ts` |
 | Auth gate | `src/Root.tsx` |
 | Supabase browser client | `src/supabaseClient.ts` |
