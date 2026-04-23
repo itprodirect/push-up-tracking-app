@@ -16,6 +16,7 @@ import {
   totalFor,
 } from './storage';
 import { formatHeaderDate, formatHistoryDate, parseKey, todayKey } from './dates';
+import { PageHero } from './PageHero';
 import { TrendChart, TrendRange } from './TrendChart';
 
 const noopSyncStatusChange: OnCloudSyncStatusChange = () => {};
@@ -128,6 +129,8 @@ export default function PushUps({
         <span className="date">{formatHeaderDate(parseKey(viewDate))}</span>
       </header>
 
+      <PageHero image="/images/app/heroes/pushups-hero.png" />
+
       <section className="card">
         {!isToday && (
           <div className="viewing-banner">
@@ -203,7 +206,7 @@ export default function PushUps({
       </div>
 
       <div className="section-title">Trend</div>
-      <div className="card">
+      <div className="card card-analytics-bg">
         <div className="range-tabs">
           {([7, 30, 365, 1825, 'all'] as TrendRange[]).map((r) => (
             <button key={String(r)} className={range === r ? 'active' : ''} onClick={() => setRange(r)}>

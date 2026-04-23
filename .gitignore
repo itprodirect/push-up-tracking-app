@@ -17,4 +17,5 @@ test-results/
 playwright/.auth/
 *.png
 !public/*.png
+!public/images/app/**/*.png
 tsconfig.tsbuildinfo

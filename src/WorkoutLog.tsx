@@ -91,7 +91,16 @@ export function WorkoutLog({
       </div>
 
       {rangeDays.length === 0 ? (
-        <div className="card empty-state">No workouts logged in this range yet.</div>
+        <div className="card empty-state empty-state-rich">
+          <img
+            className="empty-state-illustration"
+            src="/images/app/empty-states/workout-empty-state.png"
+            alt=""
+            aria-hidden="true"
+            loading="lazy"
+          />
+          <div className="empty-state-message">No workouts logged in this range yet.</div>
+        </div>
       ) : (
         rangeDays.map((day) => (
           <div key={day.date} className="card log-day-card">
