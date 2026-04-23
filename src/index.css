@@ -219,6 +219,105 @@ button {
   margin-bottom: 16px;
 }
 
+/* Page hero / decorative banner */
+.page-hero {
+  position: relative;
+  width: 100%;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  margin-bottom: 16px;
+  overflow: hidden;
+  background-color: var(--bg-elev);
+  background-image:
+    linear-gradient(
+      180deg,
+      rgba(15, 23, 42, 0.2) 0%,
+      rgba(15, 23, 42, 0.55) 65%,
+      rgba(15, 23, 42, 0.85) 100%
+    ),
+    var(--page-hero-image);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.25);
+}
+
+.page-hero-default {
+  aspect-ratio: 16 / 7;
+  max-height: 180px;
+}
+
+.page-hero-compact {
+  aspect-ratio: 16 / 5;
+  max-height: 140px;
+}
+
+@media (max-width: 380px) {
+  .page-hero-default {
+    aspect-ratio: 16 / 8;
+    max-height: 150px;
+  }
+  .page-hero-compact {
+    aspect-ratio: 16 / 6;
+    max-height: 120px;
+  }
+}
+
+/* Subtle analytics background accent for trend/chart cards */
+.card-analytics-bg {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.card-analytics-bg::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: url('/images/app/backgrounds/analytics-bg.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0.06;
+  pointer-events: none;
+}
+
+.card-analytics-bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(
+    180deg,
+    rgba(30, 41, 59, 0.4) 0%,
+    rgba(30, 41, 59, 0.85) 100%
+  );
+  pointer-events: none;
+}
+
+/* Empty state image (workout log) */
+.empty-state-illustration {
+  display: block;
+  width: 100%;
+  max-width: 220px;
+  height: auto;
+  margin: 0 auto 14px;
+  opacity: 0.85;
+  border-radius: 12px;
+  filter: drop-shadow(0 8px 20px rgba(15, 23, 42, 0.4));
+}
+
+.empty-state.empty-state-rich {
+  padding: 28px 20px 24px;
+}
+
+.empty-state-rich .empty-state-message {
+  color: var(--text-dim);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
 .viewing-banner {
   display: flex;
   justify-content: space-between;
