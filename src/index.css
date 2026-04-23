@@ -225,7 +225,7 @@ button {
   width: 100%;
   border-radius: 16px;
   border: 1px solid var(--border);
-  margin-bottom: 16px;
+  margin-bottom: 20px;
   overflow: hidden;
   background-color: var(--bg-elev);
   background-image:
@@ -244,7 +244,7 @@ button {
 
 .page-hero-default {
   aspect-ratio: 16 / 7;
-  max-height: 180px;
+  max-height: 160px;
 }
 
 .page-hero-compact {
@@ -255,7 +255,7 @@ button {
 @media (max-width: 380px) {
   .page-hero-default {
     aspect-ratio: 16 / 8;
-    max-height: 150px;
+    max-height: 140px;
   }
   .page-hero-compact {
     aspect-ratio: 16 / 6;
@@ -300,9 +300,9 @@ button {
 .empty-state-illustration {
   display: block;
   width: 100%;
-  max-width: 220px;
+  max-width: 200px;
   height: auto;
-  margin: 0 auto 14px;
+  margin: 0 auto 12px;
   opacity: 0.85;
   border-radius: 12px;
   filter: drop-shadow(0 8px 20px rgba(15, 23, 42, 0.4));
