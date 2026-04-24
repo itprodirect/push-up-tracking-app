@@ -16,16 +16,14 @@ vi.mock('./cloudPersistence', () => ({
   saveWorkoutDays,
 }));
 
+function keepCloudLoadPending() {
+  return new Promise<never>(() => {});
+}
+
 beforeEach(() => {
   loadPersistenceSnapshot.mockReset();
   saveWorkoutDays.mockReset();
-  loadPersistenceSnapshot.mockResolvedValue({
-    kind: 'success',
-    snapshot: {
-      entries: {},
-      workouts: {},
-    },
-  });
+  loadPersistenceSnapshot.mockImplementation(keepCloudLoadPending);
   saveWorkoutDays.mockResolvedValue({ kind: 'success' });
 });
 
