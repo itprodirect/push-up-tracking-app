@@ -4,6 +4,13 @@ This runbook prepares a one-time, admin-reviewed backfill for historical cloud r
 
 This is an operations document only. It does not authorize execution, and nothing in this repo runs the backfill automatically.
 
+Current status after the GPT-5.5 deep-review stabilization session:
+
+- The app now derives live persistence ownership from the verified Supabase Auth bearer token.
+- Legacy `owner_key = 'solo'` data is still not backfilled automatically.
+- The revised production dry-run has not been rerun yet from the checked-in SQL.
+- No production apply has been performed, and the legacy `solo` backfill is not complete.
+
 ## Goal
 
 Reassign legacy `solo` ownership to one explicit authenticated Supabase user id after the app's move to bearer-token verified, user-scoped persistence.
@@ -68,6 +75,7 @@ Why descendants are validation-only:
 ## Safety Rules
 
 - No production mutation should happen until the dry-run output is reviewed by a human.
+- No production mutation should happen from an agent session.
 - The target user id must be supplied explicitly.
 - Do not infer the target user id from email text pasted into SQL.
 - Do not run the apply script if the dry-run shows conflicts or a missing target user.

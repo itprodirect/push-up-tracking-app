@@ -4,13 +4,13 @@ _Last updated: April 2026_
 
 ## Current Phase
 
-Solo alpha with auth-gated UI, auth-protected Supabase persistence, and the decorative imagery lane (integration plus follow-up polish) live in production.
+Solo alpha with auth-gated UI, auth-protected Supabase persistence, authenticated-user cloud ownership, persistence payload validation hardening, and CI-backed local Playwright smoke coverage in place.
 
 ## Top Priorities
 
-1. Re-run the revised legacy `solo` backfill dry-run in production using the checked-in SQL from the current issue #39 safety PR
-2. Review the updated `user_settings` merge checks and only consider apply if that revised dry-run returns fully clean
-3. Decide SMTP/custom email provider and auth rate-limit hardening path for any broader beta
+1. Create a docs-only persistence v2 design plan for canonical push-up source of truth, exact set preservation, atomic day writes/RPC, migration, tests, and rollback
+2. Create issue-backed implementation tickets from that design
+3. Re-run the revised legacy `solo` backfill dry-run in production manually, review the `user_settings` merge checks, and only consider apply if the revised dry-run is fully clean
 
 ## Actively Dogfooding
 
@@ -21,22 +21,31 @@ Solo alpha with auth-gated UI, auth-protected Supabase persistence, and the deco
 - Compact sync status for cloud load, save progress, save success, and cloud-sync failures
 - Auth-protected persistence API with authenticated-user-scoped cloud ownership live
 - Subtle generated imagery on the Push-Ups and Workouts heroes, workout empty state, and trend-card analytics accents
+- Mocked/local Playwright smoke coverage for the core app path in Chromium
 
 ## Recent Session Summary
 
-- Shipped the generated-imagery lane end-to-end: `PageHero`, Push-Ups and Workouts heroes, workout empty-state illustration, and low-opacity trend-card accents.
-- Added the narrow nested-PNG `.gitignore` exception needed for `public/images/app/...` assets to deploy correctly.
-- Followed up with two small CSS polish passes: tightened hero max-heights and empty-state illustration sizing, shifted hero focal to `50% 40%` so the action stays visible on narrow/short crops, and tightened the header-to-hero gap for clearer section rhythm on both Push-Ups and Workouts.
-- The empty-state card and trend/chart card were reviewed in the final polish pass and intentionally left unchanged.
-- Validation passed with the full test suite, production build, and live visual review after each merge.
+- PR #49 updated architecture docs so Supabase persistence is described as authenticated-user scoped, with `/api/persistence` deriving ownership from the verified Supabase Auth bearer token.
+- PR #50 hardened `/api/persistence` payload validation before Supabase writes. Invalid push-up/workout payloads now return `400` and do not call Supabase mutations.
+- PR #51 removed React `act(...)` warnings from Push-Ups and Workouts screen tests without suppressing console errors or changing runtime behavior.
+- PR #52 added the existing mocked/local Playwright smoke tests to GitHub CI in Chromium.
+- Validation during the stabilization session: `npm test` passed with 142 tests, `npm run build` passed, and Playwright smoke passed locally with 4 tests.
+
+## Known Warnings
+
+- Vite still warns that `src/supabaseClient.ts` is both dynamically and statically imported, which affects chunking.
+- Vite still reports a large bundle/chunk-size warning.
 
 ## Blocked
 
-- The manual legacy `solo` apply path remains blocked until the revised production dry-run returns fully clean.
+- Persistence v2 implementation is blocked on a reviewed design for the canonical push-up source of truth and atomic day-write strategy.
+- The manual legacy `solo` apply path remains blocked until the revised production dry-run returns fully clean and is reviewed by a human operator.
 
 ## Do Not Work On Yet
 
-- Multi-user account management beyond the upcoming user-scoped persistence slice
+- Persistence v2 implementation without the docs-only design plan
+- Legacy `solo` apply without a fresh clean production dry-run
+- Multi-user account management beyond the current authenticated-user ownership model
 - AI-assisted features beyond current logging and history needs
 - Attachment or media uploads
 - PWA or offline-first changes
@@ -52,7 +61,10 @@ Solo alpha with auth-gated UI, auth-protected Supabase persistence, and the deco
 
 ## Recommended Issue Order
 
-1. Re-run the revised legacy `solo` dry-run in production and inspect the new summary fields
-2. SMTP/custom email provider and auth rate-limit hardening
-3. #16 - Historical views and cloud aggregation validation
-4. #15 - Export and backup path
+1. Docs-only persistence v2 design plan
+2. Issue-backed implementation tickets from that design
+3. Re-run and review the revised legacy `solo` production dry-run manually
+4. Implement the canonical push-up persistence source of truth
+5. Implement atomic day writes after the source-of-truth decision
+6. Add deployed auth/persistence smoke validation with a disposable account or operator checklist automation
+7. Later: address Vite bundle/chunk warnings, SMTP/auth hardening, historical views, export/backup, and broader UX polish

@@ -12,6 +12,7 @@ Canonical reference for the shipped Supabase-backed persistence path now live in
 - Cloud persistence now flows through the Vercel serverless endpoint at `/api/persistence`.
 - `/api/persistence` now requires a valid Supabase bearer token.
 - `/api/persistence` scopes reads and writes to the authenticated Supabase user id from that bearer token.
+- `/api/persistence` validates push-up and workout payloads before Supabase writes; invalid payloads return `400` without Supabase mutations.
 - Supabase v1 schema and tables are in place for push-up and workout persistence.
 - Writes were changed from broad owner-level replacement toward day-scoped persistence behavior at the API boundary.
 
@@ -72,6 +73,12 @@ Current runtime behavior:
 - Push-up persistence uses per-day rows in `pushup_days`.
 - The API also reads and writes `user_settings.pushup_settings` to preserve compatibility with the current push-up snapshot shape.
 
+Important v1 limitation:
+
+- Push-up persistence still has a source-of-truth design issue between `user_settings.pushup_settings.entries` and `pushup_days` aggregate rows.
+- Day writes are not atomic yet.
+- Persistence v2 has not been designed or implemented.
+
 ## Important Current Behaviors
 
 - `app.tab` remains local-only in `localStorage`.
@@ -84,6 +91,19 @@ Current runtime behavior:
 - Legacy rows that still exist under `owner_key = 'solo'` are not auto-backfilled by the app. Use the manual admin backfill path if that historical data still matters.
 - The admin dry-run/apply workflow for that legacy backfill lives in [`docs/legacy-solo-backfill-runbook.md`](/C:/Users/user/push-up-tracking-app/docs/legacy-solo-backfill-runbook.md). The dry-run uses session-local temp objects only and does not mutate permanent app tables.
 - Same-day local-over-remote conflict behavior still exists on initial merge.
+
+## Current Quality State
+
+- `npm test` passed with 142 tests during the GPT-5.5 deep-review stabilization session.
+- `npm run build` passed during the same stabilization session.
+- `npm run test:e2e` passed locally with 4 mocked/local Playwright smoke tests.
+- The mocked/local Playwright smoke suite now runs in GitHub CI on Chromium.
+- React `act(...)` warnings from the Push-Ups and Workouts screen tests are resolved without suppressing console errors.
+
+Known warnings that still remain:
+
+- Vite warns that `src/supabaseClient.ts` is both dynamically and statically imported, which affects chunking.
+- Vite reports a large bundle/chunk-size warning.
 
 ## Local Dev and Deployment
 
@@ -102,10 +122,17 @@ Current runtime behavior:
 
 ## Follow-Up That Still Remains
 
+- Create a docs-only persistence v2 design plan before implementation.
+- Decide the canonical push-up source of truth and how exact sets are preserved.
+- Design an atomic day-write/RPC strategy and read/write migration path.
+- Create issue-backed implementation tickets from the design.
+- Run and review the legacy `owner_key = 'solo'` production dry-run manually before any apply step.
+- Add deployed auth/persistence smoke validation with a disposable account or operator checklist automation.
 - Add SMTP/custom email provider setup and auth rate-limit hardening when moving beyond the current minimal auth gate.
 - Decide whether and when to remove localStorage fallback.
 - Revisit same-day local-over-remote conflict behavior.
 - Decide whether push-up goal settings should stay local-only or move into the cloud path.
+- Address the Vite chunking and large bundle warnings later.
 
 ## Historical Reference
 

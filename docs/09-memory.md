@@ -11,6 +11,7 @@ Durable constraints, patterns, and assumptions that any agent working in this re
 - The runtime cloud path is `api/persistence.js` at `/api/persistence`, backed by Supabase.
 - `localStorage` is still part of the runtime for local-first loading, rollout fallback, and local-only state.
 - localStorage keys are versioned (`.v1` suffix) to support future migration.
+- The existing mocked/local Playwright smoke suite runs in GitHub CI on Chromium.
 - The exercise catalog normalizes aliases to canonical names at save time, not through batch migration.
 - Legacy stored data (old category labels, unnormalized exercise names) is handled at read and display boundaries.
 - Tests use Vitest with React Testing Library. Run with `npm test`.
@@ -25,8 +26,12 @@ Durable constraints, patterns, and assumptions that any agent working in this re
 - Supabase credentials live in Vercel environment variables, never in client code.
 - `/api/persistence` requires a valid Supabase bearer token.
 - The live owner model is the authenticated Supabase user id stored in `owner_key`.
+- `/api/persistence` derives `owner_key` from the verified Supabase Auth bearer token, not from request payloads or client-provided owner identifiers.
+- `/api/persistence` validates push-up and workout payloads before Supabase writes; invalid payloads should return `400` without calling Supabase mutations.
 - Legacy rows may still exist under `owner_key = 'solo'`, but that is now a manual operational backfill concern rather than the live runtime model.
 - Current same-day merge behavior favors local data over remote data when both exist.
+- Push-up persistence still needs a persistence v2 design decision because `user_settings.pushup_settings.entries` and `pushup_days` aggregate rows both exist in the current model.
+- Day writes are not atomic yet; do not imply they are until an explicit RPC/transaction strategy is designed and implemented.
 
 ## Development Constraints
 
@@ -34,9 +39,12 @@ Durable constraints, patterns, and assumptions that any agent working in this re
 - Don't add dependencies without explicit approval.
 - Don't introduce new architectural patterns that are not documented in `02-architecture.md`.
 - Keep the narrow `.gitignore` exception for `public/images/app/**/*.png`; nested app PNG assets need to be tracked for deploys.
-- Don't assume user-scoped persistence, SMTP/custom email-provider setup, or localStorage fallback removal exist beyond what `01-current-state.md` documents.
+- Don't assume SMTP/custom email-provider setup or localStorage fallback removal exist beyond what `01-current-state.md` documents.
+- Don't assume persistence v2 has been designed or implemented.
+- Don't remove localStorage fallback until cloud persistence, conflict handling, import UX, and backfill safety are improved enough to justify it.
 - Normalization happens at save and read boundaries, not through batch storage migrations.
 - The legacy `solo` backfill remains manual/admin-only. No agent should run a production apply path without an explicitly clean rerun of the revised checked-in dry-run SQL.
+- Do not mark the legacy `solo` backfill complete until the production dry-run has been rerun, reviewed, and the manual apply path has actually been completed.
 - The currently verified production backfill target is `4666c980-df61-4285-8007-0c065ab32e70` (`nick@itprodirect.com`), but that target should still be re-verified with a fresh read-only `auth.users` query before any future manual production action.
 
 ## Rollout Rules
