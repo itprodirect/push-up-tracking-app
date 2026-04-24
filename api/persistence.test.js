@@ -284,6 +284,105 @@ describe('api/persistence user-scoped persistence', () => {
     ]);
   });
 
+  it.each([
+    [
+      'negative push-up reps',
+      {
+        kind: 'pushups',
+        day: '2026-04-15',
+        entry: { date: '2026-04-15', sets: [-1] },
+      },
+      'Invalid push-up payload: entry.sets[0] must be a positive integer no greater than 10000.',
+    ],
+    [
+      'non-integer push-up reps',
+      {
+        kind: 'pushups',
+        day: '2026-04-15',
+        entry: { date: '2026-04-15', sets: [12.5] },
+      },
+      'Invalid push-up payload: entry.sets[0] must be a positive integer no greater than 10000.',
+    ],
+    [
+      'unreasonably large push-up reps',
+      {
+        kind: 'pushups',
+        day: '2026-04-15',
+        entry: { date: '2026-04-15', sets: [10001] },
+      },
+      'Invalid push-up payload: entry.sets[0] must be a positive integer no greater than 10000.',
+    ],
+    [
+      'invalid push-up date keys',
+      {
+        kind: 'pushups',
+        day: '2026-02-31',
+        entry: { date: '2026-02-31', sets: [10] },
+      },
+      'Invalid push-up payload: day must be a valid YYYY-MM-DD date.',
+    ],
+    [
+      'negative workout reps',
+      {
+        kind: 'workouts',
+        day: '2026-04-16',
+        workout: workoutPayload([{ weight: 135, reps: -1 }]),
+      },
+      'Invalid workout payload: workout.exercises[0].sets[0].reps must be a positive integer no greater than 1000.',
+    ],
+    [
+      'non-integer workout reps',
+      {
+        kind: 'workouts',
+        day: '2026-04-16',
+        workout: workoutPayload([{ weight: 135, reps: 8.5 }]),
+      },
+      'Invalid workout payload: workout.exercises[0].sets[0].reps must be a positive integer no greater than 1000.',
+    ],
+    [
+      'negative workout weight',
+      {
+        kind: 'workouts',
+        day: '2026-04-16',
+        workout: workoutPayload([{ weight: -5, reps: 8 }]),
+      },
+      'Invalid workout payload: workout.exercises[0].sets[0].weight must be between 0 and 100000.',
+    ],
+    [
+      'unreasonably large workout payloads',
+      {
+        kind: 'workouts',
+        day: '2026-04-16',
+        workout: {
+          date: '2026-04-16',
+          exercises: Array.from({ length: 101 }, (_, index) => ({
+            id: `local-ex-${index}`,
+            name: `Exercise ${index}`,
+            sets: [],
+          })),
+        },
+      },
+      'Invalid workout payload: workout.exercises cannot exceed 100 exercises.',
+    ],
+  ])('returns 400 and skips Supabase writes for %s', async (_label, body, error) => {
+    getUser.mockResolvedValue({
+      data: { user: { id: 'validation-user' } },
+      error: null,
+    });
+
+    const res = await invokeHandler({
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer valid-token',
+      },
+      body,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.jsonBody).toEqual({ error });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('keeps owner_key filters isolated across sequential requests from different users', async () => {
     const firstUserId = 'user/one';
     const secondUserId = 'user/two';
@@ -419,5 +518,19 @@ function emptyResponse(status = 204) {
     ok: true,
     status,
     text: vi.fn().mockResolvedValue(''),
+  };
+}
+
+function workoutPayload(sets) {
+  return {
+    date: '2026-04-16',
+    exercises: [
+      {
+        id: 'local-ex-1',
+        name: 'Bench Press',
+        category: 'Chest / Push',
+        sets,
+      },
+    ],
   };
 }

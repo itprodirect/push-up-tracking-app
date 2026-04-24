@@ -1,6 +1,15 @@
 import { createClient } from '@supabase/supabase-js';
 
 const PUSHUP_ENTRIES_KEY = 'entries';
+
+// Server-side write limits sit well above normal UI usage, but below values that
+// would indicate a malformed or abusive client payload.
+const MAX_PUSHUP_SET_REPS = 10000;
+const MAX_PUSHUP_SETS_PER_DAY = 1000;
+const MAX_WORKOUT_REPS_PER_SET = 1000;
+const MAX_WORKOUT_WEIGHT = 100000;
+const MAX_WORKOUT_EXERCISES_PER_DAY = 100;
+const MAX_WORKOUT_SETS_PER_DAY = 1000;
 let authVerificationClient;
 
 export default async function handler(req, res) {
@@ -30,22 +39,24 @@ export default async function handler(req, res) {
 
     if (req.method === 'POST') {
       const body = parseBody(req);
-      const day = normalizeDay(body?.day);
+      const validation = validatePersistencePayload(body);
 
-      if (body?.kind === 'pushups' && day) {
-        await savePushupEntry(userId, day, normalizeEntry(body.entry, day));
+      if (!validation.ok) {
+        res.status(400).json({ error: validation.error });
+        return;
+      }
+
+      if (validation.kind === 'pushups') {
+        await savePushupEntry(userId, validation.day, validation.entry);
         res.status(200).json({ ok: true });
         return;
       }
 
-      if (body?.kind === 'workouts' && day) {
-        await saveWorkoutDay(userId, day, normalizeWorkout(body.workout, day));
+      if (validation.kind === 'workouts') {
+        await saveWorkoutDay(userId, validation.day, validation.workout);
         res.status(200).json({ ok: true });
         return;
       }
-
-      res.status(400).json({ error: 'Unsupported persistence payload.' });
-      return;
     }
 
     res.setHeader('Allow', 'GET, POST');
@@ -313,7 +324,9 @@ function normalizeEntries(value) {
     if (!isRecord(item)) continue;
     entries[key] = {
       date: typeof item.date === 'string' ? item.date : key,
-      sets: Array.isArray(item.sets) ? item.sets.filter((set) => Number.isFinite(set)) : [],
+      sets: Array.isArray(item.sets)
+        ? item.sets.filter((set) => isPositiveIntegerAtMost(set, MAX_PUSHUP_SET_REPS))
+        : [],
     };
   }
   return entries;
@@ -323,52 +336,129 @@ function ownerKeyFilter(userId) {
   return `owner_key=eq.${encodeURIComponent(userId)}`;
 }
 
-function normalizeWorkouts(value) {
-  if (!isRecord(value)) return {};
-
-  const workouts = {};
-  for (const [key, item] of Object.entries(value)) {
-    if (!isRecord(item)) continue;
-    workouts[key] = {
-      date: typeof item.date === 'string' ? item.date : key,
-      exercises: Array.isArray(item.exercises)
-        ? item.exercises
-            .filter((exercise) => isRecord(exercise) && typeof exercise.id === 'string' && typeof exercise.name === 'string')
-            .map((exercise) => ({
-              id: exercise.id,
-              name: exercise.name,
-              category: normalizeCategory(exercise.category),
-              sets: Array.isArray(exercise.sets)
-                ? exercise.sets
-                    .filter((set) => isRecord(set) && Number.isFinite(set.weight) && Number.isFinite(set.reps))
-                    .map((set) => ({
-                      weight: set.weight,
-                      reps: set.reps,
-                    }))
-                : [],
-            }))
-        : [],
-    };
+function validatePersistencePayload(body) {
+  if (!isRecord(body)) {
+    return invalidPayload('Unsupported persistence payload.');
   }
-  return workouts;
+
+  if (body.kind === 'pushups') {
+    const day = normalizeDay(body.day);
+    if (!day) return invalidPayload('Invalid push-up payload: day must be a valid YYYY-MM-DD date.');
+
+    const entry = validatePushupEntry(body.entry, day);
+    if (!entry.ok) return entry;
+
+    return { ok: true, kind: 'pushups', day, entry: entry.value };
+  }
+
+  if (body.kind === 'workouts') {
+    const day = normalizeDay(body.day);
+    if (!day) return invalidPayload('Invalid workout payload: day must be a valid YYYY-MM-DD date.');
+
+    const workout = validateWorkout(body.workout, day);
+    if (!workout.ok) return workout;
+
+    return { ok: true, kind: 'workouts', day, workout: workout.value };
+  }
+
+  return invalidPayload('Unsupported persistence payload.');
 }
 
-function normalizeEntry(value, day) {
-  if (!isRecord(value)) return null;
+function validatePushupEntry(value, day) {
+  if (value === null) return { ok: true, value: null };
+  if (!isRecord(value)) return invalidPayload('Invalid push-up payload: entry must be an object or null.');
+  if (!dateFieldMatchesDay(value.date, day)) {
+    return invalidPayload('Invalid push-up payload: entry.date must match day.');
+  }
+  if (!Array.isArray(value.sets)) return invalidPayload('Invalid push-up payload: entry.sets must be an array.');
+  if (value.sets.length > MAX_PUSHUP_SETS_PER_DAY) {
+    return invalidPayload(`Invalid push-up payload: entry.sets cannot exceed ${MAX_PUSHUP_SETS_PER_DAY} sets.`);
+  }
 
-  const entries = normalizeEntries({ [day]: value });
-  return entries[day] ?? null;
+  const sets = [];
+  for (const [index, reps] of value.sets.entries()) {
+    if (!isPositiveIntegerAtMost(reps, MAX_PUSHUP_SET_REPS)) {
+      return invalidPayload(
+        `Invalid push-up payload: entry.sets[${index}] must be a positive integer no greater than ${MAX_PUSHUP_SET_REPS}.`,
+      );
+    }
+    sets.push(reps);
+  }
+
+  return { ok: true, value: { date: day, sets } };
 }
 
-function normalizeWorkout(value, day) {
-  if (!isRecord(value)) return null;
+function validateWorkout(value, day) {
+  if (value === null) return { ok: true, value: null };
+  if (!isRecord(value)) return invalidPayload('Invalid workout payload: workout must be an object or null.');
+  if (!dateFieldMatchesDay(value.date, day)) {
+    return invalidPayload('Invalid workout payload: workout.date must match day.');
+  }
+  if (!Array.isArray(value.exercises)) return invalidPayload('Invalid workout payload: workout.exercises must be an array.');
+  if (value.exercises.length > MAX_WORKOUT_EXERCISES_PER_DAY) {
+    return invalidPayload(
+      `Invalid workout payload: workout.exercises cannot exceed ${MAX_WORKOUT_EXERCISES_PER_DAY} exercises.`,
+    );
+  }
 
-  const workouts = normalizeWorkouts({ [day]: value });
-  return workouts[day] ?? null;
+  let totalSets = 0;
+  const exercises = [];
+  for (const [exerciseIndex, exercise] of value.exercises.entries()) {
+    if (!isRecord(exercise)) {
+      return invalidPayload(`Invalid workout payload: workout.exercises[${exerciseIndex}] must be an object.`);
+    }
+    if (!isNonEmptyStringAtMost(exercise.id, 200)) {
+      return invalidPayload(
+        `Invalid workout payload: workout.exercises[${exerciseIndex}].id must be a non-empty string.`,
+      );
+    }
+    if (!isNonEmptyStringAtMost(exercise.name, 200)) {
+      return invalidPayload(
+        `Invalid workout payload: workout.exercises[${exerciseIndex}].name must be a non-empty string.`,
+      );
+    }
+    if (!Array.isArray(exercise.sets)) {
+      return invalidPayload(`Invalid workout payload: workout.exercises[${exerciseIndex}].sets must be an array.`);
+    }
+
+    totalSets += exercise.sets.length;
+    if (totalSets > MAX_WORKOUT_SETS_PER_DAY) {
+      return invalidPayload(`Invalid workout payload: total sets cannot exceed ${MAX_WORKOUT_SETS_PER_DAY}.`);
+    }
+
+    const sets = [];
+    for (const [setIndex, set] of exercise.sets.entries()) {
+      if (!isRecord(set)) {
+        return invalidPayload(
+          `Invalid workout payload: workout.exercises[${exerciseIndex}].sets[${setIndex}] must be an object.`,
+        );
+      }
+      if (!isPositiveIntegerAtMost(set.reps, MAX_WORKOUT_REPS_PER_SET)) {
+        return invalidPayload(
+          `Invalid workout payload: workout.exercises[${exerciseIndex}].sets[${setIndex}].reps must be a positive integer no greater than ${MAX_WORKOUT_REPS_PER_SET}.`,
+        );
+      }
+      if (!isFiniteNumberInRange(set.weight, 0, MAX_WORKOUT_WEIGHT)) {
+        return invalidPayload(
+          `Invalid workout payload: workout.exercises[${exerciseIndex}].sets[${setIndex}].weight must be between 0 and ${MAX_WORKOUT_WEIGHT}.`,
+        );
+      }
+      sets.push({ weight: set.weight, reps: set.reps });
+    }
+
+    exercises.push({
+      id: exercise.id,
+      name: exercise.name,
+      category: normalizeCategory(exercise.category),
+      sets,
+    });
+  }
+
+  return { ok: true, value: { date: day, exercises } };
 }
 
 function normalizeDay(value) {
-  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
+  return isValidDay(value) ? value : null;
 }
 
 function normalizeCategory(value) {
@@ -383,6 +473,34 @@ function normalizeCategory(value) {
 
 function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function invalidPayload(error) {
+  return { ok: false, error };
+}
+
+function dateFieldMatchesDay(value, day) {
+  return value === undefined || (isValidDay(value) && value === day);
+}
+
+function isValidDay(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}
+
+function isPositiveIntegerAtMost(value, max) {
+  return Number.isInteger(value) && value > 0 && value <= max;
+}
+
+function isFiniteNumberInRange(value, min, max) {
+  return Number.isFinite(value) && value >= min && value <= max;
+}
+
+function isNonEmptyStringAtMost(value, maxLength) {
+  return typeof value === 'string' && value.trim().length > 0 && value.length <= maxLength;
 }
 
 function compareByParentAndSortOrder(a, b) {
