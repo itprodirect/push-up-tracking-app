@@ -33,6 +33,7 @@ Browser (Vite + React SPA on Vercel)
 - `POST /api/persistence` accepts `{ kind, day, ... }` payloads and persists the targeted day.
 - The endpoint owns normalization, day-scoped persistence behavior, and Supabase translation.
 - The endpoint requires `Authorization: Bearer <jwt>` and returns `401` for missing or invalid tokens.
+- The endpoint verifies the bearer token with Supabase Auth and derives the persistence owner from the verified `auth.users.id`.
 - Supabase credentials live in Vercel environment variables, never in the browser.
 
 ### Runtime Configuration
@@ -69,9 +70,11 @@ Current practical usage:
 - Supabase Auth v0 is live.
 - The UI is closed behind approved-user email magic-link sign-in.
 - Session restore and sign-out are part of the shipped runtime.
-- Persistence is auth-protected, but still single-owner via `owner_key = 'solo'`.
-- Authenticated users do not yet get user-scoped data partitioning.
-- Replacing the hard-coded owner model is the next major data/auth follow-up.
+- Persistence is auth-protected and authenticated-user scoped.
+- `/api/persistence` reads and writes `owner_key` as the authenticated Supabase user id from the verified bearer token.
+- The legacy `owner_key = 'solo'` model is no longer the desired runtime ownership model.
+- Any remaining `solo` rows are legacy cloud data only. They are not auto-backfilled by the app and must be handled through the manual admin runbook when needed.
+- The legacy `solo` backfill is still a separate operational step; do not assume it has already been applied.
 
 ### localStorage During Rollout
 
@@ -85,7 +88,8 @@ Current practical usage:
 
 - Any return to the earlier AWS / DynamoDB planning path. Those notes are historical only, not the live runtime.
 - Direct browser -> Supabase table access
-- User-scoped persistence and multi-user ownership
+- Legacy `solo` data migration outside the manual admin backfill runbook
+- Broader multi-user account management beyond authenticated-user-scoped persistence
 - Rich sync or conflict handling beyond current local-over-remote merge behavior
 - Removing localStorage fallback entirely
 - SMTP/custom email provider setup and auth rate-limit hardening
