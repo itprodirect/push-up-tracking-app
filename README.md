@@ -45,6 +45,7 @@ npx playwright install chromium
 - The E2E layer seeds a reusable authenticated `storageState` instead of re-running magic-link login in every test.
 - Tests intercept `/api/persistence` directly, which keeps coverage focused on the shipped cloud boundary without requiring a live Vercel API or Supabase project.
 - Playwright blocks service workers in this suite so request routing on `/api/persistence` cannot be bypassed by future SW changes.
+- The mocked/local Playwright smoke suite runs in GitHub CI on Chromium.
 
 ## Deploy on Vercel
 
@@ -100,6 +101,7 @@ Set these in Vercel for both Preview and Production:
 - Supabase Auth v0 gates the app UI behind approved-user email magic-link sign-in.
 - Session restore and sign-out are live.
 - Cloud persistence flows through `api/persistence.js` at `/api/persistence`, uses day-scoped writes, and now requires a valid Supabase bearer token.
+- `/api/persistence` derives ownership from the verified Supabase Auth bearer token and validates push-up/workout payloads before Supabase writes.
 - Authenticated screens now show a compact sync status for cloud load, save progress, save success, and sync failures.
 - Supabase v1 schema and tables are in place for push-up and workout persistence.
 - `app.tab` remains local-only, and localStorage fallback remains enabled during rollout.
@@ -115,8 +117,20 @@ What is intentionally not done yet:
 
 - `localStorage` fallback remains enabled during rollout.
 - `app.tab` and push-up goal settings remain local-only.
+- Push-up persistence still needs a persistence v2 design plan because `user_settings.pushup_settings.entries` and `pushup_days` aggregate rows both exist in the current model.
+- Day writes are not atomic yet.
+- Persistence v2 has not been designed or implemented.
 - Legacy cloud rows previously stored under `owner_key = 'solo'` are not auto-backfilled by the app. Use the manual admin backfill runbook if that data still needs to move to a real user id.
+- Legacy `solo` backfill is not complete and still requires a manual production dry-run/review before any apply step.
 - SMTP/custom email provider setup and auth hardening are deferred.
+
+Current repo quality state after the GPT-5.5 deep-review stabilization session:
+
+- `npm test` passed with 142 tests.
+- `npm run build` passed.
+- `npm run test:e2e` passed locally with 4 mocked/local Playwright smoke tests.
+- React `act(...)` warnings from Push-Ups and Workouts screen tests are resolved.
+- Existing Vite warnings remain for `src/supabaseClient.ts` dynamic/static import chunking and large bundle/chunk size.
 
 Most likely setup mistakes:
 

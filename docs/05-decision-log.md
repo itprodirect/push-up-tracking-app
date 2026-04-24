@@ -4,6 +4,15 @@ Lightweight record of important product and architecture decisions.
 
 ---
 
+### 2026-04 - Deep-review stabilization before persistence v2 implementation
+
+**Context:** A GPT-5.5 read-only deep review found repo-health issues around persistence documentation, request validation, noisy React test warnings, CI smoke coverage, and the still-open push-up persistence source-of-truth problem.
+**Decision:** Stabilize the existing v1 path first: document authenticated-user ownership accurately, reject invalid persistence payloads before Supabase writes, remove React `act(...)` warnings in tests without suppressing console errors, and add the existing mocked/local Playwright smoke suite to CI. Do not start persistence v2 implementation until there is a docs-only design plan.
+**Why:** The app is healthier if the current boundary is well described, validated, and covered before changing its storage model. The remaining push-up source-of-truth issue needs an explicit design rather than an opportunistic code change.
+**Impact:** The next session should create the persistence v2 design plan first, then issue-backed implementation tickets. Persistence v2 is not designed or implemented yet, and the legacy `solo` backfill is not complete.
+
+---
+
 ### 2026-04 - Decorative imagery stays subtle, branded, and reusable
 
 **Context:** The app needed a first visual polish pass after the core auth and persistence foundation shipped, without making the logging workflows feel noisy or distracting.
@@ -36,7 +45,7 @@ Lightweight record of important product and architecture decisions.
 **Context:** Auth v0 gated the UI, but the persistence API also needed protection without expanding scope into schema changes or a full ownership migration.
 **Decision:** Require a valid Supabase bearer token for `GET` and `POST` requests to `/api/persistence`, while keeping the temporary single-owner model `owner_key = 'solo'`.
 **Why:** This protects the serverless persistence boundary immediately and preserves the minimal slice size needed for rollout.
-**Impact:** The persistence API is now auth-protected, but data is still not partitioned per authenticated user. The next major data/auth slice should replace `solo` with user-scoped persistence.
+**Impact:** Historical note. This protected the API first; later authenticated-user scoped persistence replaced the live `solo` ownership model. Any remaining `solo` rows are now legacy backfill data only.
 
 ---
 
@@ -117,7 +126,7 @@ Lightweight record of important product and architecture decisions.
 **Context:** Historical pre-auth planning note. At this stage the app had no user identity, and solo alpha could operate without auth because there was one trusted user.
 **Decision:** No external beta user will be added until a real auth path is in place.
 **Why:** Without auth, there is no way to isolate user data or protect the persistence boundary correctly.
-**Impact:** This decision drove the later auth v0 implementation. The remaining beta gate is now replacing temporary `owner_key = 'solo'` storage with user-scoped persistence.
+**Impact:** This decision drove the later auth v0 implementation and authenticated-user scoped persistence work. The remaining `owner_key = 'solo'` concern is legacy production backfill, not the live runtime model.
 
 ---
 
@@ -144,7 +153,7 @@ Lightweight record of important product and architecture decisions.
 **Context:** Auth is needed before any external beta user. The app already uses Supabase for persistence, so the auth provider choice affects integration complexity and the owner model transition.
 **Decision:** Prefer Supabase Auth as the next auth path for the current architecture and scope. Defer Clerk for now unless future product requirements justify the added dependency.
 **Why:** Supabase Auth integrates naturally with the existing Supabase backend, avoids adding a second external service, and keeps the auth boundary close to the persistence boundary. Row-level security can build directly on Supabase Auth user IDs.
-**Impact:** This preference is now implemented in auth v0. The `owner_key = 'solo'` model still needs to be replaced by real user-scoped persistence. Clerk remains a valid option to revisit later if the product needs stronger out-of-the-box auth UX, orgs or teams support, or broader productized auth requirements.
+**Impact:** This preference is now implemented in auth v0, and live persistence ownership is now derived from the verified Supabase user id. Clerk remains a valid option to revisit later if the product needs stronger out-of-the-box auth UX, orgs or teams support, or broader productized auth requirements.
 
 ---
 
